@@ -1,0 +1,102 @@
+\section{Discussion}
+\label{sec:discussion}
+
+This work extends the HydroGym paper's GPPO-vs-PPO result on Kolmogorov
+flow~\cite{hydrogym2026} in two directions, and the second produces a
+seed-dominance result that is itself the main finding.
+
+At the regular operating point ($\Re=45$) the paper's core claim holds: GPPO reaches
+PPO's best reward in substantially fewer episodes in 4 of 5 seeds
+($\approx$\SIrange{63}{84}{\percent}, $\text{seed}=0$'s \SI{63}{\percent}
+closest to the reported \SI{65}{\percent}), the direction is seed-stable
+across all five, and the off-policy family reaches better final reward than
+the on-policy family in every seed. GSAC never beats SAC here --- the
+analytic gradient does not help the off-policy method when the flow is not
+chaotic. This is consistent with the SAPO~\cite{sapo2025} reading that the
+analytic gradient earns its keep by \emph{stabilizing} a hard landscape
+rather than by accelerating an easy one; at $\Re=45$ SAC's replay buffer
+already solves the task.
+
+At the chaotic operating point ($\Re=300$), by contrast, no separable
+ordering survives: the conference version, at $n=2$, reported that GSAC is
+the most robust of the four and that analytic-gradient injection delays the
+break in direction.
+Over five seeds the second claim does not hold at all (GPPO$-$PPO mean
+$-2.4$ episodes, sign-flip $p=0.81$) and the first survives only as a
+non-significant lean (every pairwise permutation $p\ge 0.19$;
+Kruskal--Wallis $p=0.57$, Friedman $p=0.77$). Each algorithm's first-NaN
+episode spans more than an order of magnitude; PPO, first to break at
+$\text{seed}=0$, is the most robust of the four at $\text{seed}=2$; at
+$\text{seed}=2$ both off-policy methods collapse at episode 2. The ``clean
+multiplicative'' $n=1$ story and the ``GSAC most robust'' $n=2$ story are
+both small-$n$ artifacts. The finding that replaces them: in the
+chaotic regime the breaking point is dominated by the random path of
+training, not by the algorithm --- within-algorithm cross-seed s.d.\
+(30--57 episodes) swamps the spread of between-algorithm means (35--75).
+Analytic-gradient injection, off-policy structure, and their combination
+fail to impose a statistically separable ordering on when a differentiable
+chaotic-flow simulation diverges under RL training. This is a concrete,
+quantified instance of the chaos-induced gradient instability of Metz et
+al.~\cite{metz2021} and the Re-shrunk predictability horizon of
+Boffetta--Musacchio~\cite{boffetta2017}: at this problem scale the
+instability is not merely large, it is \emph{irreducibly stochastic}. It
+also matches what RPO~\cite{rpo2025} targets --- the training instability of
+BPTT-through-a-surrogate --- and suggests that the RPO/GI-PPO line of
+adaptive weighting, rather than a fixed mix, is the right tool for this
+regime.
+
+Two mechanistic results do survive, both algorithm-design-independent. The
+first is buffer dilution
+(\cref{sec:buffer}): a post-trigger survival window has non-zero probability
+only when the poisoned fraction of the replay buffer at the trigger is
+$\sim$1\% or below --- that is, only for GSAC runs that trigger past
+$\sim$episode 120 --- and exactly one of the 20 $\Re=300$ runs shows such a
+window, in precisely that case, so the mechanism is suggestive rather than
+confirmed. The second is the early-init failure mode (\cref{sec:earlyinit}):
+when the randomly initialized policy composed with the $\Re=300$ base flow
+already sits near the solver's stability boundary, divergence occurs within
+about two episodes, before any actor-learning algorithm has a foothold; bare
+SAC and GSAC fail identically here, with normal control amplitude and a
+normal analytic-gradient norm at the point of divergence. Together these
+explain why GSAC has the highest ceiling of the four (141, 63, and 122
+episodes when it is given a runway) but no reliable floor (episode 2 at
+$\text{seed}=2$).
+
+For a practitioner adding an analytic through-simulator gradient to an RL
+controller for a near-turbulent flow: (i) expect no reliable improvement in
+training stability from the gradient alone, and budget for divergence at an
+unpredictable episode; (ii) an off-policy buffer buys a recovery chance only
+if the divergence happens late, when the buffer is large --- it is not a
+general safety net; and (iii) the useful engineering artifacts are the
+diagnostics (first-NaN-episode distribution, pre-break flatness check,
+buffer-dilution estimate), not a ranking of algorithms. None of this refutes
+the HydroGym paper's core claim that GPPO helps at its tested operating
+point; it shows the benefit does not carry a seed-robust ordering once the
+regime is chaotic.
+
+Several caveats bound these conclusions. The study uses five seeds: this is
+enough to falsify the $n=2$ orderings and to support the negative claim, but
+GSAC's non-significant median lean ($p\approx0.19$--$0.38$) would need a
+substantially larger seed budget to confirm or reject --- though, because the
+finding is one of seed-dominance, additional seeds are expected to strengthen
+it rather than overturn it. The chaotic regime is $\Re=300$ rather than the
+originally intended $\Re=450$, forced by the solver's $\Re\approx350$--$380$
+stability limit at this grid and time step; a milder chaotic regime might
+admit a more stable ordering, which the planned Reynolds sweep
+$\{45,100,200,300\}$ is designed to test. The GPPO/GSAC mixing ratio,
+horizon, and remaining hyperparameters are our own choices, since the
+HydroGym paper does not publish them, so the \SI{63}{\percent} versus
+\SI{65}{\percent} agreement is a strong corroborating signal but not a claim
+of identical implementation. The PPO update is deliberately minimal (one
+full-batch step per episode), which makes ``PPO'' here weaker than a tuned
+implementation; the comparison is therefore relative and budget-matched
+across all four algorithms rather than absolute. The episodes (15 RL steps)
+and the analytic horizon (6 steps) are both short and may be insufficient to
+observe the full course of RL convergence or of chaotic divergence, and the
+50/50 analytic/model-free mix is held fixed --- the adaptive $\alpha$-graded
+estimator~\cite{suh2022}, AHAC's~\cite{ahac2024} adaptive horizon, and
+SAPO's~\cite{sapo2025} entropy-based smoothing are not tested. Finally, the
+two mechanistic results rest on thin evidence: the buffer-dilution
+calculation of \cref{sec:buffer} is supported by a single recovery window in
+20 runs, and the early-init failure of \cref{sec:earlyinit} by a single
+seed; both are real but rare, and neither is established as a rate.

@@ -1,0 +1,97 @@
+\section{Experimental setup and reproducibility}
+\label{sec:setup}
+
+\subsection{Configuration}
+
+\Cref{tab:config} lists every hyperparameter. All four algorithms are trained
+for \num{500} episodes at both Reynolds numbers, matching the training budget
+reported by the HydroGym paper~\cite{hydrogym2026}.
+
+\begin{table*}[t]
+\centering
+\caption{Full configuration. Identical across all four algorithms except
+where an algorithm-specific row applies.}
+\label{tab:config}
+\small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|l|}
+\hline
+Parameter & Value \\
+\hline
+Grid & $64\times 64$ (4096 DOF) \\
+\hline
+Solver & pseudo-spectral IMEX-RK4CN (real \texttt{hydrogym.jax}) \\
+\hline
+$\Re$ (regular / chaotic) & 45 / 300 \\
+\hline
+Episodes / steps per episode & 500 / 15 \\
+\hline
+Environment $\dd t$ / \texttt{action\_time} & 0.001 / 1.0 \\
+\hline
+Reward & $\alpha_{\text{reward}}=1$ (flow energy $+$ control cost) \\
+\hline
+Analytic horizon (GPPO/GSAC) & $H=6$ steps, mean (deterministic) action \\
+\hline
+Gradient mixing & $0.5\cdot$ model-free $+\ 0.5\cdot$ analytic \\
+\hline
+Optimizer / learning rate & Adam / $3\times 10^{-4}$ (actor and critic) \\
+\hline
+Policy / value / critic network & 2 hidden layers $\times$ 64 units, $\tanh$ \\
+\hline
+Action & PPO: $a_\mu=0.5\tanh(\cdot)$, sampled, not re-clipped;\\
+       & SAC: squashed $\tanh$ \\
+\hline
+PPO & $\gamma{=}0.99$, $\lambda{=}0.95$, clip $\epsilon{=}0.2$, entropy coeff.\ 0.001,\\
+    & 1 full-batch step / episode \\
+\hline
+SAC & $\gamma{=}0.99$, $\alpha{=}0.1$ (fixed), $\tau_s{=}0.005$,\\
+    & 10 updates / episode, batch 64, buffer $= 500\times 15$ \\
+\hline
+Seeds & $n=5$ (seed $=0$--$4$) \\
+\hline
+Hardware & RTX 5060 laptop GPU (8\,GB), JAX 0.10.2 $+$ CUDA 12 \\
+\hline
+\end{tabular}%
+}
+
+\end{table*}
+
+\subsection{Seed protocol}
+\label{sec:seedprotocol}
+
+Each $(\text{algorithm},\Re,\text{seed})$ triple is trained independently for
+five seeds. The JAX PRNG is fully deterministic, so a given
+$(\text{config},\text{seed})$ is bit-for-bit reproducible --- the
+$\text{seed}=3$ GSAC/$\Re=300$ run was regenerated identically after its first
+dump was lost. Configurations are run strictly one at a time: this class of
+consumer GPU cannot host concurrent JAX processes without severe memory
+contention. Per-seed wall time for the full 8-configuration sweep is
+$\sim$6--8.5\,h ($\text{seed}=4$: $\sim$6.2\,h; PPO $\sim$28\,min/config,
+GPPO $\sim$63\,min, SAC $\sim$28\,min, GSAC $\sim$60\,min).
+
+\subsection{Reproducibility package}
+
+Following the ML reproducibility checklist~\cite{pineau2021}, the release
+will include the experiment code as a standalone repository separated from
+the upstream HydroGym clone; a pinned environment specification (122
+packages), a portable environment-rebuild script, and the parametrized sweep
+driver; every per-configuration result dump --- episode rewards,
+analytic-gradient norms, action-amplitude logs, and wall times --- together
+with the driver logs; and a Zenodo DOI accompanied by ``Code availability''
+and ``Data availability'' statements.
+
+\subsection{Analysis of the chaotic-regime outcome}
+\label{sec:analysisplan}
+
+The outcome variable at $\Re=300$ is the \emph{first-NaN episode} --- the
+training episode at which the flow simulation first returns a non-finite
+reward. This is not a short-circuit: training continues to run all 500
+episodes regardless. The four algorithms are compared pairwise on their five
+paired per-seed differences using an exact sign-flip permutation
+test (all $2^5=32$ relabelings, two-sided) and a bootstrap
+\SI{95}{\percent} CI for the median difference (\num{20000} resamples).
+Omnibus tests are Kruskal--Wallis (unblocked) and Friedman (blocked by
+seed). The pre-registered decision rule (\cref{sec:intro}): report ``no
+seed-robust ordering'' unless GSAC beats every other algorithm at
+$p<0.05$ one-sided.

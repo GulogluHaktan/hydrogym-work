@@ -1,0 +1,35 @@
+\section{Conclusion and future work}
+\label{sec:conclusion}
+
+Analytic-gradient injection does not eliminate numerical instability in the
+chaotic regime and, across independent training seeds, does not reliably
+delay the break either. On-policy injection has no measurable effect on the
+breaking point, and while the gradient-enhanced off-policy method GSAC has
+the highest median breaking point and is the most robust of the four in most
+seeds, no pairwise or omnibus test reaches significance; the ordering
+suggested by a small seed budget does not survive a larger one. The
+reproducible statement is one of seed-dominance: in the chaotic regime the
+episode at which training first diverges is dominated by the random path of
+training, not by the algorithm. What survives is mechanistic: the break is
+sudden and precursor-free; the replay buffer's size at the trigger sets
+whether a brief post-trigger survival window can appear; and in a rare mode
+the flow diverges within a couple of episodes regardless of algorithm because
+the random initial policy already sits near the solver's stability boundary.
+On this evidence GSAC has the highest ceiling of the four but no reliable
+floor.
+
+Five directions follow directly. First, extend well beyond five seeds to
+test GSAC's non-significant median lean; the seed-dominance of the breaking
+point means a decisive test needs many seeds. Second, resolve the
+trigger-episode cause with an action-amplitude-logged short-horizon re-run of
+seeds 0--1 --- is the trigger a single large sampled action or a resonant
+sequence? Third, test whether GSAC's floor can be raised (not its ceiling)
+with cheap, principled guards: analytic-gradient norm clipping, a
+non-finite-gradient fallback to pure SAC, a few-episode analytic warmup, and
+an adaptive mixing weight in the style of the GI-PPO $\alpha$-policy or of
+AHAC / SAPO. Fourth, run a Reynolds sweep $\{45,100,200,300\}$ to locate the
+Reynolds number at which any algorithm ordering disappears, framed with the
+predictability-horizon scaling of Boffetta and Musacchio. Fifth, reconcile
+against the official HydroGym GPPO implementation and a stronger PPO baseline
+with epochs and minibatching, and extend the comparison to a second
+environment.

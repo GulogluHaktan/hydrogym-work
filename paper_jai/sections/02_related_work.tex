@@ -1,0 +1,127 @@
+\section{Related work}
+\label{sec:related}
+
+\Cref{tab:related} positions this study against the closest prior work along
+three axes: the base RL family, whether an analytic (through-simulator)
+gradient is used, and whether the chaotic/turbulent regime is addressed.
+
+\begin{table*}[tbp]
+\centering
+\caption{Positioning against the closest prior work. AG $=$ analytic
+(through-simulator) policy gradient; ME $=$ maximum-entropy (SAC-style)
+objective; \checkmark\ = present, dash = absent.}
+\label{tab:related}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|l|l|c|c|l|}
+\hline
+Work & Base & AG & ME & Chaotic & Domain \\
+\hline
+HydroGym / GPPO~\cite{hydrogym2026} & PPO & \checkmark & -- & one $\Re$ & Kolmogorov flow \\
+\hline
+GI-PPO~\cite{gippo2023}             & PPO & \checkmark (adapt.) & -- & -- & rigid body \\
+\hline
+RPO~\cite{rpo2025}                  & PPO & \checkmark & -- & -- & control suites \\
+\hline
+SHAC~\cite{shac2022}                & AC  & \checkmark (short-$H$) & -- & -- & locomotion \\
+\hline
+AHAC~\cite{ahac2024}                & AC  & \checkmark (adapt.-$H$) & -- & -- & contact-rich \\
+\hline
+SAPO~\cite{sapo2025}                & SAC & \checkmark & \checkmark & -- & rigid/deformable \\
+\hline
+Bucci et al.~\cite{bucci2019}       & DDPG & -- & -- & \checkmark & Kuramoto--Sivashinsky \\
+\hline
+Font et al.~\cite{font2025}         & PPO & -- & -- & \checkmark & separation bubble \\
+\hline
+This work                  & PPO, SAC & \checkmark & \checkmark & 45 / 300 & Kolmogorov flow \\
+\hline
+\end{tabular}%
+}
+
+\end{table*}
+
+\subsection{RL for flow control and HydroGym}
+Since Rabault et al.~\cite{rabault2019}, model-free RL has repeatedly
+succeeded on turbulent flow control: separation-bubble
+control~\cite{font2025} reports $\sim$\SI{9}{\percent} vs $\sim$\SI{6.8}{\percent}
+reduction over classical periodic forcing; an early study~\cite{turbdrl2020}
+establishes DRL's applicability to turbulent conditions; real-time
+state-dependent bluff-body wake control~\cite{react2026} achieves 2--4$\times$
+the performance of model-based baselines in wind-tunnel experiments; deep RL
+has also learned energy-efficient collective swimming gaits by exploiting
+shed vortices~\cite{verma2018vortices}. A broad
+robotics survey~\cite{drlrobotics2025} documents the wider maturity of RL
+for real-world control. HydroGym~\cite{hydrogym2026} unifies these under one
+solver-agnostic interface, shows zero-shot policy transfer across
+environments, and reports the $\ge$\SI{65}{\percent} sample-efficiency gain
+for GPPO over PPO on Kolmogorov flow that this paper examines.
+FluidGym~\cite{fluidgym2026} is a related PyTorch-based differentiable
+benchmark with PPO/SAC baselines. None of these works systematically
+compares analytic-gradient injection across a regular and a chaotic regime.
+
+\subsection{Analytic policy gradients through differentiable simulation}
+The single closest prior method to GPPO is GI-PPO~\cite{gippo2023}:
+it introduces an ``$\alpha$-policy'' that adaptively weights the analytic
+gradient against the PPO gradient, down-weighting the analytic term when it
+is detected to be high-variance or biased. Our fixed 50/50 mix is the
+non-adaptive special case ($\alpha$ held constant). RPO~\cite{rpo2025}
+analyzes the on-policy analytic-gradient setting directly, showing that
+reparameterization policy gradients with sample reuse optimize a PPO-style
+surrogate via backpropagation-through-time (BPTT) and targeting exactly the
+training instability this paper measures at $\Re=300$.
+The broader family originated in robotics/control. SHAC~\cite{shac2022}
+decouples the analytic gradient from the full episode horizon using
+short-horizon rollouts and a smooth critic; our 6-step horizon is a direct
+adaptation. AHAC~\cite{ahac2024} replaces the fixed horizon with
+one adaptively truncated to avoid stiff dynamics. SAPO~\cite{sapo2025}
+carries the idea into a maximum-entropy, off-policy framework, testing
+whether entropy regularization smooths the analytic-gradient landscape; our
+GSAC is the first application of the SAPO idea to fluid dynamics.
+
+\subsection{Analytic-gradient instability in chaotic systems}
+The theoretical basis of our hypothesis is Metz et al.~\cite{metz2021}: in
+chaotic dynamical systems, backpropagated gradients explode through a
+butterfly-effect mechanism rooted in the system Jacobian spectrum, with
+clipping, truncated BPTT, or a switch to zeroth-order methods proposed as
+remedies. Parmas et al.~\cite{parmas2018pipps} show the same failure
+directly in model-based policy search: gradients through long chains of
+nonlinear computation become large and effectively random in direction, and
+reparameterization (analytic) gradients suffer from it while
+likelihood-ratio (model-free) gradients are comparatively robust --- the
+same asymmetry this paper's on-policy result partially echoes
+(\cref{sec:results}). The fluid-dynamics counterpart is Boffetta and
+Musacchio~\cite{boffetta2017}: the largest Lyapunov exponent (estimated in
+practice via the classical time-series method of Wolf et
+al.~\cite{wolf1985lyapunov}) of homogeneous-isotropic turbulence grows with
+$\Re$ and the predictability horizon shrinks inversely with it. Together
+these frame our 500-episode
+finding that GPPO and GSAC also eventually reach NaN, only later: instability
+is inevitable; what differs is only the delay mechanism. That gradient-free
+RL \emph{can} control spatiotemporal chaos is not in question --- Bucci et
+al.~\cite{bucci2019} do exactly this on the Kuramoto--Sivashinsky equation
+--- the question here is whether \emph{analytic-gradient} injection survives
+the chaotic regime.
+
+\subsection{Analytic vs.\ zeroth-order gradients; partial differentiability}
+Suh et al.~\cite{suh2022} compare analytic and zeroth-order policy gradients
+in systems with stiffness and discontinuities, and via a bias--variance
+analysis propose an $\alpha$-graded interpolating estimator, of which our
+50/50 mix is roughly the $\alpha=0.5$ special case. A 2026
+follow-up~\cite{onoda2026} re-tests the same question with a lighter
+hybrid-switching scheme. ABPT~\cite{abpt2025} proposes an amended BPTT scheme
+combining 0-step and $N$-step returns for partially differentiable rewards,
+a problem class close to HydroGym's mixed control-reward / physics-state
+structure.
+
+\subsection{Base algorithms and distributed PDE control}
+The gradient-free anchors are PPO~\cite{ppo2017} and Soft
+Actor-Critic~\cite{sac2018,sacapps2018}. PPO builds on TRPO~\cite{trpo2015}
+and Generalized Advantage Estimation (GAE)~\cite{gae2015}; Soft
+Q-learning~\cite{softq2017} is the origin of SAC's maximum-entropy
+framework; both algorithms' updates in this study use
+Adam~\cite{kingma2015adam}. On the distributed structure of PDE actuation, Peitz et
+al.~\cite{peitz2024} exploit translational equivariance to turn a
+high-dimensional control problem into a multi-agent problem with identical
+uncoupled agents; Kolmogorov flow's low-wavenumber sinusoidal actuators sit
+in the same distributed-control setting.

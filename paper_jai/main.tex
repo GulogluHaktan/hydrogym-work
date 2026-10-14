@@ -1,0 +1,234 @@
+%% ===========================================================================
+%%  Gradient at the Edge of Chaos
+%%  Journal of Automation and Intelligence submission build.
+%%  Elsevier CAS bundle, double-column class (cas-dc). To switch to the
+%%  single-column layout, change the \documentclass line below to
+%%  cas-sc -- the section files under sections/ are class-independent.
+%% ===========================================================================
+\documentclass[a4paper,fleqn]{cas-dc}
+
+% ---- bibliography: numbered (Vancouver-style) references -----------------
+\usepackage[numbers,sort&compress]{natbib}
+
+% ---- math ---------------------------------------------------------------------
+\usepackage{bm}
+\usepackage{mathtools}
+
+% ---- units ------------------------------------------------------------------
+\usepackage{siunitx}
+\sisetup{detect-weight=true,detect-family=true}
+
+% ---- algorithms -------------------------------------------------------------
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\providecommand{\textproc}[1]{\textsc{#1}}
+
+% ---- diagrams -------------------------------------------------------------
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,shapes.misc}
+
+\tikzset{
+  block/.style   = {draw, rounded corners=2pt, align=center, font=\small,
+                     minimum height=8mm, inner sep=4pt, fill=blue!4},
+  envblock/.style = {draw, rounded corners=2pt, align=center, font=\small,
+                     minimum height=8mm, inner sep=4pt, fill=green!6},
+  anblock/.style  = {draw, rounded corners=2pt, align=center, font=\small,
+                     minimum height=8mm, inner sep=4pt, fill=red!6},
+  databox/.style  = {draw, align=center, font=\small, minimum height=8mm,
+                     inner sep=4pt, fill=gray!8},
+  flow/.style     = {-{Latex[length=2mm]}, thick},
+  grad/.style     = {-{Latex[length=2mm]}, thick, dashed, red!70!black},
+}
+
+% ---- misc -----------------------------------------------------------------
+\usepackage{microtype}
+\emergencystretch=2em
+\usepackage{cleveref}
+\crefname{equation}{Eq.}{Eqs.}
+\crefname{figure}{Fig.}{Figs.}
+\crefname{table}{Table}{Tables}
+\crefname{section}{Section}{Sections}
+\crefname{algocf}{Algorithm}{Algorithms}
+
+% ---- CAS class tweaks ---------------------------------------------------------
+% (a) name the target journal in the first-page footer (default: "Elsevier")
+% (b) print the "ORCID(s):" footnote line only when an ORCID is actually given
+\ExplSyntaxOn
+\cs_set:Npn \__first_footerline:
+  {
+    \group_begin:
+      \small \sffamily
+      \ifnum\theblind>0\relax\else \__short_authors: :~ \fi
+      { \rmfamily \itshape Journal~of~Automation~and~Intelligence }
+    \group_end:
+  }
+\cs_set:Npn \printorcid
+  {
+    \seq_if_empty:NF \g_stm_orcid_seq
+      {
+        \group_begin:
+          \tex_let:D \thefootnote \relax \footnotetext
+            {
+              \raggedright
+              \textsc{orcid}(s):\c_space_token
+              \seq_use:Nn \g_stm_orcid_seq { ;~ }
+            }
+        \group_end:
+      }
+  }
+\ExplSyntaxOff
+
+% ---- notation shorthands (used across sections/) --------------------------
+\renewcommand{\Re}{\mathit{Re}}
+\newcommand{\gan}{g_{\mathrm{an}}}
+\newcommand{\Lan}{\mathcal{L}_{\mathrm{an}}}
+\newcommand{\dd}{\mathrm{d}}
+
+\graphicspath{{figures/}}
+
+\begin{document}
+\let\WriteBookmarks\relax
+\def\floatpagepagefraction{1}
+\def\textpagefraction{.001}
+
+\shorttitle{Gradient at the edge of chaos}
+\shortauthors{C. \"Ozkurt et~al.}
+
+\title[mode = title]{Gradient at the Edge of Chaos: Why Analytic-Gradient
+Reinforcement Learning Has No Seed-Robust Advantage on Chaotic Kolmogorov Flow}
+
+\author[1]{Cem \"Ozkurt}
+\cormark[1]
+\ead{TODO@institutional.address}
+\credit{Conceptualization, Methodology, Investigation,
+Writing -- original draft, Project administration}
+
+\author[1]{Ey\"up Altu\u{g} Tun\c{c}}
+\credit{Software, Validation, Investigation,
+Writing -- review \& editing}
+
+\author[1]{Muhammed Emin Onay}
+\credit{Data curation, Visualization, Investigation,
+Writing -- review \& editing}
+
+\author[1]{Haktan Yusuf G\"ulo\u{g}lu}[orcid=0009-0007-9429-6154]
+\ead{haktanguloglu24@gmail.com}
+\credit{Conceptualization, Software, Formal analysis, Resources,
+Writing -- original draft, Writing -- review \& editing}
+
+\affiliation[1]{organization={Sakarya University, National Technology
+Workshop, Artificial Intelligence Center},
+                city={Sakarya},
+                country={T\"urkiye}}
+
+\cortext[1]{Corresponding author.}
+
+\begin{abstract}
+Does injecting an analytic
+(backpropagated-through-the-simulator) policy gradient help or hurt as a
+fluid-flow control task becomes chaotic, and does off-policy reinforcement
+learning (RL) tolerate the resulting gradient instability better than
+on-policy RL? The HydroGym paper reports that Gradient-Enhanced PPO (GPPO)
+cuts training iterations by at least \SI{65}{\percent} relative to PPO, shown
+at a single Reynolds number and seed. We evaluate PPO, GPPO, SAC, and a
+gradient-enhanced SAC variant (GSAC), the first transfer of off-policy
+maximum-entropy analytic-gradient RL to fluid dynamics, on the real
+\mbox{\texttt{hydrogym.jax}} Kolmogorov-flow environment at a regular
+($\Re=45$) and a chaotic ($\Re=300$) operating point over five seeds. At
+$\Re=45$, GPPO reaches PPO's best reward in substantially fewer episodes in 4
+of 5 seeds, reproducing the reported mechanism. At $\Re=300$, all four
+algorithms eventually diverge, and the first-divergence episode is dominated
+by the seed, not the algorithm: an exact permutation test separates no pair
+of algorithms (all $p\ge 0.19$). The reproducible findings are mechanistic:
+the break is sudden and precursor-free; the replay buffer's size at the
+trigger determines whether a brief post-trigger survival window can appear;
+and in a rare mode the flow diverges within about two episodes regardless of
+algorithm. Analytic-gradient injection thus imposes no seed-robust ordering
+on chaotic-regime training stability.
+\end{abstract}
+
+\begin{highlights}
+\item GSAC is the first off-policy analytic-gradient RL applied to Kolmogorov flow.
+\item At $\Re=45$, GPPO reproduces the reported sample-efficiency gain (63--84\%).
+\item At $\Re=300$ all four algorithms diverge; the breaking episode is seed-dominated.
+\item An exact permutation test separates no pair of algorithms (all $p\ge0.19$).
+\item The chaotic-regime break is sudden, precursor-free and replay-buffer gated.
+\end{highlights}
+
+% JAI Guide for Authors: maximum of 6 keywords.
+\begin{keywords}
+analytic policy gradients \sep differentiable simulation \sep
+reinforcement learning for flow control \sep chaotic dynamics \sep
+training stability \sep Kolmogorov flow
+\end{keywords}
+
+\maketitle
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_methods}
+\input{sections/04_setup}
+\input{sections/05_results}
+\input{sections/06_mechanism}
+\input{sections/07_discussion}
+\input{sections/08_conclusion}
+
+\section*{Acknowledgment}
+The authors thank Sakarya University's National Technology Workshop
+Artificial Intelligence Center for the computational resources used in this
+study.
+
+\section*{Declaration of competing interest}
+The authors declare no competing interests.
+
+\section*{Data and code availability}
+The experiment code, pinned environment specification, sweep drivers, and
+every per-configuration result dump (episode rewards, analytic-gradient
+norms, action-amplitude logs, wall times) will be released as a standalone
+repository and archived with a DOI on Zenodo upon publication.
+
+\printcredits
+
+\bibliographystyle{elsarticle-num}
+\bibliography{refs}
+
+%% Biographies follow the author order.  Each \bio{} still needs its photo
+%% file: save it next to main.tex and change \bio{} to \bio{<filename>},
+%% matching the \bio{photo-haktan} pattern used for the last author.  JAI
+%% requires a photograph for every author of a full-length article.
+\bio{}
+Cem \"Ozkurt is a researcher at Sakarya University's National Technology
+Workshop Artificial Intelligence Center, where the present study was carried
+out. He conceived and designed the study, led its methodology and
+administered the project.
+\endbio
+
+\bio{}
+Ey\"up Altu\u{g} Tun\c{c} is an undergraduate student in Mechatronics
+Engineering at Sakarya University of Applied Sciences and works at Sakarya
+University's National Technology Workshop Artificial Intelligence Center. In
+this study he contributed to the software implementation and to the
+validation of the training pipeline across the five seeds.
+\endbio
+
+\bio{}
+Muhammed Emin Onay is an undergraduate student in Mechatronics Engineering at
+Sakarya University of Applied Sciences and works at Sakarya University's
+National Technology Workshop Artificial Intelligence Center. In this study he
+contributed to the curation of the per-run experimental data and to the
+visualisation of the breaking-point and gradient-norm results.
+\endbio
+
+\bio{photo-haktan}
+Haktan Yusuf G\"ulo\u{g}lu graduated at the top of his class from Profilo
+Vocational and Technical Anatolian High School and is currently an
+undergraduate student in Computer Engineering at Sakarya University of
+Applied Sciences. He works as a student researcher at Sakarya University's
+National Technology Workshop Artificial Intelligence Center, where the
+present study was carried out. His research centers on reinforcement
+learning and large language models, with a particular interest in the
+stability of learning algorithms under complex, high-dimensional, and
+chaotic dynamics. This work is his first contribution to the
+differentiable-simulation reinforcement learning literature.
+\endbio
+
+\end{document}

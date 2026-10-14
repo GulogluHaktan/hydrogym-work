@@ -1,0 +1,117 @@
+\section{Introduction}
+\label{sec:intro}
+
+The active control of fluid flows --- for drag reduction, mixing
+enhancement, or extreme-event suppression --- is one of the areas where
+machine learning has changed computational fluid
+dynamics~\cite{brunton2020mlfluid,vinuesa2022enhancing} most directly, and
+reinforcement learning (RL) is now one of its most active application
+routes. Rabault et al.~\cite{rabault2019} first showed that deep RL can control periodic vortex
+shedding behind a cylinder, achieving $\sim$\SI{8}{\percent} drag reduction
+at $\Re=100$; the line has since extended into the turbulent regime, e.g.\
+turbulent separation-bubble control~\cite{font2025} and real-time
+state-dependent turbulent-wake control~\cite{react2026}.
+HydroGym~\cite{hydrogym2026} consolidates these scattered codebases into a
+single solver-agnostic platform spanning \num{61}+ environments from laminar
+to turbulent and --- alongside classical solvers --- ships a JAX-based, end-to-end
+\emph{differentiable} pseudo-spectral solver that continues the line of
+differentiable-CFD libraries JAX-CFD~\cite{jaxcfd2021} and
+JAX-Fluids~\cite{jaxfluids2022,jaxfluids2024}. A methodologically related,
+PyTorch-based differentiable flow-control benchmark, FluidGym~\cite{fluidgym2026},
+belongs to the same ecosystem.
+
+Differentiability lets RL move beyond model-free training by computing
+\emph{analytic policy gradients}: the derivative of the reward with respect
+to the policy parameters, obtained by the chain rule \emph{through the
+simulator itself} rather than by sampling. The HydroGym paper demonstrates
+this with GPPO, in which the analytic gradient is mixed with PPO's
+likelihood-ratio gradient --- a construction closely related to
+Gradient-Informed PPO~\cite{gippo2023} --- and on the Kolmogorov-flow
+environment this is reported to cut training iterations by at least
+\SI{65}{\percent} and to yield controllers with lower action
+amplitude~\cite{hydrogym2026}. That result, however, is shown at a
+\emph{single operating point} of the wide $\Re=40$--$500$ range the paper
+defines for Kolmogorov flow; the behaviour of the analytic gradient at the
+regular and chaotic ends of that range is not separately compared.
+
+This gap overlaps a documented risk. Metz et al.~\cite{metz2021} demonstrate
+a common ``chaos-induced failure mode'' of backpropagation through iterated
+maps, physics simulations, and learned optimizers, and tie it to the
+spectrum of the system Jacobian. On the fluid-dynamics side, Boffetta and
+Musacchio~\cite{boffetta2017} show that the largest Lyapunov exponent of
+homogeneous-isotropic turbulence grows with Reynolds number, so the
+predictability horizon shrinks as $\Re$ rises. Together these two
+independent results suggest that in a chaotic regime the norm and direction
+of the analytic gradient can become hypersensitive to initial conditions,
+and that GPPO's reported advantage could weaken, or reverse, as $\Re$
+increases.
+
+Analytic-gradient injection has so far been applied mostly with
+\emph{on-policy} methods or in rigid-body robotics tasks: SHAC~\cite{shac2022}
+mitigates the exploding/vanishing gradient problem with short-horizon
+rollouts and a learned terminal value; AHAC~\cite{ahac2024} adapts the
+horizon to avoid stiff dynamics. On the off-policy side, SAPO~\cite{sapo2025}
+carries analytic-gradient RL into a maximum-entropy (SAC-like) framework and
+reports strong performance on deformable-body tasks --- but this approach has
+never been applied to fluid dynamics. We add GSAC, a
+gradient-enhanced version of SAC~\cite{sac2018}, as a fourth method, placing
+the comparison at the intersection of the SHAC family (short-horizon analytic
+gradient) and the SAPO family (off-policy maximum-entropy analytic gradient),
+and asking whether the off-policy replay-buffer structure tolerates
+chaotic-regime gradient instability better than on-policy GPPO.
+
+The paper makes the following contributions:
+\begin{enumerate}
+  \item We extend HydroGym's GPPO-vs-PPO result on Kolmogorov
+  flow~\cite{hydrogym2026} from a single Reynolds point to a
+  regular-vs-chaotic regime comparison, and from $n=1$ to $n=5$ seeds
+  (\cref{sec:results}).
+  \item We introduce GSAC (SAC $+$ short-horizon analytic
+  gradient), never previously applied to HydroGym and the first transfer of
+  the SAPO~\cite{sapo2025} family to fluid dynamics, giving a $2\times 2$
+  design (on-/off-policy $\times$ with/without analytic gradient) that
+  isolates each factor (\cref{sec:methods}).
+  \item \emph{A seed-dominance result, replicated over five seeds with a
+  formal test.} In the chaotic regime all four algorithms eventually
+  diverge, and the episode at which they first diverge is dominated by the
+  training seed, not the algorithm: each algorithm's first-NaN episode spans
+  more than an order of magnitude, PPO is both the first to break at
+  $\text{seed}=0$ and the most robust of the four at $\text{seed}=2$, and an
+  exact sign-flip permutation test separates no pair of algorithms (all
+  $p\ge 0.19$; Kruskal--Wallis $p=0.57$, Friedman $p=0.77$).
+  Analytic-gradient injection does not delay the on-policy break
+  (GPPO$-$PPO mean $-2.4$ episodes, $p=0.81$).
+  \item \emph{Two mechanistic results that do survive}, both
+  algorithm-design-independent: (a) a replay-buffer dilution calculation for
+  whether a brief post-trigger ``survival window'' can appear (non-zero
+  probability only for large-buffer GSAC; one window seen in \num{20} runs,
+  that case); and (b) an early-init failure mode --- when the initial policy
+  already sits near the solver's stability boundary the flow diverges within
+  $\sim$2 episodes regardless of algorithm --- documented directly with
+  per-episode action-amplitude and analytic-gradient-norm logs
+  (\cref{sec:mechanism}).
+  \item GSAC is characterized as highest ceiling, no reliable
+  floor: 2--10$\times$ the stable horizon of any other method when training
+  gets a foothold, but episode-2 failure when the flow diverges before
+  learning begins.
+\end{enumerate}
+
+We pre-registered the hypothesis that the norm/variance of the analytic
+gradient would be stable at low $\Re$ and unstable at high $\Re$; against
+this instability, GSAC's off-policy structure would be more robust than
+GPPO's on-policy structure. At $n=5$ this was not supported at $p<0.05$:
+GSAC has the highest median breaking point and is most robust in 3 of 5
+seeds, and GSAC$-$GPPO is positive in the mean ($+39$ episodes), but the
+sign-flip permutation $p$-value is \num{0.19} and the effect is dominated by
+seed-to-seed variance. Per the pre-registered decision rule (\cref{sec:sig})
+the finding stands as ``no seed-robust ordering''; GSAC's lean is reported
+as a candidate effect for a larger-$n$ study.
+
+The remainder of the paper is organized as follows. \Cref{sec:related}
+reviews analytic-gradient RL and chaotic-system instability.
+\Cref{sec:methods} formulates the environment, the four algorithms, and the
+analytic-gradient mechanism with its computation graph and algorithm boxes.
+\Cref{sec:setup} gives the configuration, seed protocol, and reproducibility
+package. \Cref{sec:results} reports the regular- and chaotic-regime results
+and the significance test; \cref{sec:mechanism} dissects the break;
+\cref{sec:discussion,sec:conclusion} discuss and conclude.

@@ -1,0 +1,536 @@
+\section{Methods}
+\label{sec:methods}
+
+\subsection{Approach}
+\label{sec:approach}
+
+Model-free reinforcement learning treats the simulator as a black box and
+estimates the policy gradient from sampled returns alone. This is robust and
+makes almost no assumptions, but the estimate is high-variance and
+sample-hungry, and on flow-control problems it can take tens of thousands of
+environment interactions to converge. When the simulator is itself
+differentiable, a second route becomes available: differentiate the
+accumulated reward \emph{through} the solver and obtain the policy gradient
+from the chain rule directly. This \emph{analytic} (or first-order) gradient
+is far lower in variance and, on smooth control problems, converges in a
+fraction of the interactions. It is the mechanism behind
+differentiable-physics methods such as SHAC~\cite{shac2022},
+AHAC~\cite{ahac2024} and SAPO~\cite{sapo2025} in robotics, behind
+differentiable-CFD control with JAX-CFD~\cite{jaxcfd2021} and
+JAX-Fluids~\cite{jaxfluids2022}, and behind the GPPO result on Kolmogorov
+flow that this paper follows up~\cite{hydrogym2026}.
+
+The derivative that makes this route fast also makes it fragile.
+Backpropagating through a long or stiff rollout produces gradients that
+explode or vanish, and the estimate is biased whenever the horizon is
+truncated or the dynamics are contact-rich or
+chaotic~\cite{metz2021,suh2022}. The established mitigations are to use a
+\emph{short} differentiation horizon, to forward-propagate only the
+deterministic mean action so the differentiated chain stays smooth, and to
+\emph{mix} the analytic gradient with the ordinary model-free gradient rather
+than trust it alone~\cite{shac2022,suh2022,gippo2023}. Chaotic flow is
+exactly where this fragility is expected to matter most: neighbouring
+trajectories separate exponentially, so the through-solver gradient of a
+many-step rollout can be swamped by noise, and the predictability horizon
+shrinks as the Reynolds number rises~\cite{metz2021,boffetta2017}. Whether
+the analytic gradient still helps in that regime --- and whether an
+off-policy replay buffer absorbs the instability better than an on-policy
+update --- is the question this study is built to answer.
+
+The rest of this section constructs the four algorithms used to test it. We
+fix a single environment and control problem (\cref{sec:env}) and cast it as
+a Markov decision process (\cref{sec:mdp}); we state the two model-free
+estimators, PPO and SAC (\cref{sec:ppo,sec:sac}); we then define the analytic
+gradient and the fixed 50/50 mixing rule (\cref{sec:analytic}); and finally
+we assemble the on-policy variant GPPO (\cref{sec:gppo}) and the off-policy
+variant GSAC (\cref{sec:gsac}). The factorial design that crosses these
+choices is described first.
+
+\subsection{Overall design}
+\label{sec:design}
+
+We compare four algorithms in a $2\times 2$ factorial design that crosses the
+RL family (on-policy vs.\ off-policy) with analytic-gradient injection
+(absent vs.\ present), so that each factor and their interaction can be read
+off directly (\cref{fig:design}). All four share one environment, one network
+architecture, one optimizer, and one training budget (\cref{sec:setup}); they
+are evaluated at a regular ($\Re=45$) and a chaotic ($\Re=300$) operating
+point of the same Kolmogorov-flow solver.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[node distance=6mm]
+  \node[font=\small\bfseries] (c1) at (0,2.1) {model-free gradient};
+  \node[font=\small\bfseries] (c2) at (4.2,2.1) {$+$ analytic gradient};
+  \node[font=\small\bfseries,rotate=90] at (-2.6,1.0) {on-policy};
+  \node[font=\small\bfseries,rotate=90] at (-2.6,-1.4) {off-policy};
+
+  \node[block,minimum width=30mm] (ppo)  at (0,1.0)  {\textbf{PPO}\\clipped surrogate\\ \cite{ppo2017}};
+  \node[anblock,minimum width=30mm] (gppo) at (4.2,1.0) {\textbf{GPPO}\\PPO $+$ through-sim.\\reward gradient};
+  \node[block,minimum width=30mm] (sac)  at (0,-1.4) {\textbf{SAC}\\max-entropy, twin\\critics \cite{sac2018}};
+  \node[anblock,minimum width=30mm] (gsac) at (4.2,-1.4) {\textbf{GSAC}\\SAC $+$ through-sim.\\reward gradient (new)};
+
+  \draw[flow] (ppo) -- (gppo);
+  \draw[flow] (sac) -- (gsac);
+  \draw[flow] (ppo) -- (sac);
+  \draw[flow] (gppo) -- (gsac);
+
+  % shared environment, centred under both columns; straight vertical edges
+  \node[envblock,minimum width=76mm,anchor=north] (env) at (2.1,-3.5)
+    {\textbf{Shared environment} --- real \texttt{hydrogym.jax} Kolmogorov flow\\
+    $64\times 64$ grid (4096 DOF), pseudo-spectral IMEX-RK4CN solver\\
+    regime knob: $\Re \in \{45\ (\text{regular}),\ 300\ (\text{chaotic})\}$};
+  \draw[flow] (sac.south) -- (sac.south |- env.north);
+  \draw[flow] (gsac.south) -- (gsac.south |- env.north);
+\end{tikzpicture}
+\caption{The $2\times 2$ experimental design. Horizontal edges add the
+analytic (backpropagated-through-the-simulator) reward gradient; vertical
+edges switch the RL family. GSAC (bottom right) is introduced here. All four
+algorithms are run at both Reynolds numbers with identical budgets.}
+\label{fig:design}
+\end{figure}
+
+\subsection{Environment and control problem}
+\label{sec:env}
+
+Experiments run on the real
+\texttt{hydrogym.jax.envs.kolmogorov.KolmogorovFlow} environment: a
+$64\times 64$ grid (4096 degrees of freedom), pseudo-spectral IMEX-RK4CN
+time integration~\cite{hydrogym2026,jaxcfd2021}, with four low-wavenumber
+sinusoidal forcing modes as actuators (\cref{fig:env}). The 2D
+incompressible Navier--Stokes equations in vorticity form are integrated as
+$\omega_{t+1}=f_{\mathrm{sim}}(\omega_t, a_t;\Re)$, where the discrete
+operator $f_{\mathrm{sim}}$ is written in JAX~\cite{jax2018} and is differentiable
+end-to-end.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[node distance=6mm]
+  % flow domain
+  \draw[thick] (0,0) rectangle (2.4,2.4);
+  \foreach \y in {0.4,0.8,1.2,1.6,2.0}{\draw[gray!55] (0,\y) -- (2.4,\y);}
+  \node[font=\scriptsize] at (1.2,2.75) {$64\times 64$ vorticity field $\omega_t$};
+  % actuator arrows (sinusoidal forcing modes)
+  \foreach \y/\s in {0.4/0.3,0.8/-0.3,1.2/0.3,1.6/-0.3,2.0/0.3}{
+    \draw[-{Latex[length=1.4mm]},blue!70!black] (0.12,\y) -- ($(0.12,\y)+(\s,0)$);
+    \draw[-{Latex[length=1.4mm]},blue!70!black] (2.28,\y) -- ($(2.28,\y)-(\s,0)$);}
+  \node[blue!70!black,font=\scriptsize] at (1.2,-0.55)
+    {4 forcing modes $a_t\in\mathbb{R}^4$};
+
+  % observation
+  \node[databox,align=center] (obs) at (6.1,1.9)
+    {\scriptsize $8\times 8$ subsampled\\ velocity magnitude\\ $s_t\in\mathbb{R}^{64}$};
+  \draw[flow] (2.4,1.7) -- (obs.west) node[midway,above,font=\scriptsize]{observe};
+
+  % reward
+  \node[databox,align=center] (rew) at (6.1,0.35)
+    {\scriptsize $r_t = -\big(E(\omega_t)+c\,\lVert a_t\rVert^2\big)$\\[1pt]
+     (flow energy $+$ control cost)};
+  \draw[flow] (obs.south) -- (rew.north);
+\end{tikzpicture}
+\caption{Kolmogorov-flow control problem. The policy observes an $8\times 8$
+subsampled velocity magnitude ($s_t\in\mathbb{R}^{64}$), commands four
+sinusoidal forcing-mode amplitudes ($a_t\in\mathbb{R}^{4}$), and is rewarded
+for reducing flow energy at bounded control cost. The library default
+$\alpha_{\text{reward}}=0$ (control-cost only) is overridden to
+$\alpha_{\text{reward}}=1$ so that flow energy enters the reward.}
+\label{fig:env}
+\end{figure}
+
+Two library quirks required a subclass. (i) The environment step ignores the
+per-call time-step and action-duration arguments and re-reads its own
+\texttt{default\_params}, so we override that property on a subclass
+(\texttt{FastKolmogorovFlow}) to reach proof-of-concept scale.
+(ii) The library default $\alpha_{\text{reward}}=0$ makes the reward
+control-cost only; we set $\alpha_{\text{reward}}=1$ (\cref{fig:env}).
+
+At this grid/$\dd t$ combination ($64\times 64$, $\dd t=0.001$) the solver was
+empirically observed to diverge numerically near $\Re\approx 350$--$380$ ---
+even under zero action from purely analytic initial conditions, and not
+resolved by reducing $\dd t$ tenfold (so not a simple CFL issue). We
+therefore use $\Re=300$ for the chaotic regime --- the highest value that
+stays below this limit while forming a meaningful contrast with $\Re=45$ ---
+rather than the originally intended $\Re=450$.
+
+\subsection{Markov decision process}
+\label{sec:mdp}
+
+The control task is a Markov decision process
+$(\mathcal{S},\mathcal{A},P,r,\gamma)$ with
+$s_t\in\mathbb{R}^{64}$, $a_t\in\mathbb{R}^{4}$, deterministic transition
+$s_{t+1}=g\big(f_{\mathrm{sim}}(\omega_t,a_t;\Re)\big)$ ($g$ the observation
+map), reward as in \cref{fig:env}, and discount $\gamma=0.99$. An episode is
+$T=15$ environment steps from a fixed reset state $s_0$. The policy
+$\pi_\theta(a\mid s)$ and the value / $Q$ networks are 2-hidden-layer MLPs
+(64 units, $\tanh$). The objective is the discounted return
+\begin{equation}
+  J(\theta)=\mathbb{E}_{\tau\sim\pi_\theta}\!\left[\textstyle\sum_{t=0}^{T-1}\gamma^{t}\,r(s_t,a_t)\right].
+  \label{eq:return}
+\end{equation}
+All four algorithms optimize \cref{eq:return}; they differ only in the
+gradient estimator they apply to it.
+
+\subsection{PPO: on-policy baseline}
+\label{sec:ppo}
+
+PPO is an on-policy policy-gradient method: it collects one rollout under
+the current policy, estimates each action's advantage along it, and takes a
+single trust-region-style step that is clipped to stay close to the policy
+that generated the data. The rollout is then discarded, so PPO consumes
+each unit of environment experience through exactly one gradient update.
+
+The clipped surrogate is due to Schulman et al.\ as a first-order
+approximation to the TRPO trust region~\cite{ppo2017,trpo2015}, and the
+Generalized Advantage Estimator (GAE) used to form the advantage is from the
+same group~\cite{gae2015}. All gradient steps in this study, for every
+algorithm, use Adam~\cite{kingma2015adam}, as in the original PPO and
+HydroGym~\cite{hydrogym2026} implementations.
+
+The policy is a diagonal Gaussian: the MLP produces a bounded mean
+$a_{\mu}(s)=0.5\tanh(\cdot)$ and a state-independent learnable
+$\log\sigma$; the executed action is $a\sim\mathcal{N}(a_\mu(s),\sigma^2)$
+and is \emph{not} re-clipped, so sampled $\lvert a\rvert$ can exceed
+$0.5$ (observed up to $\approx 1.2$ early in training). Advantages use
+GAE~\cite{gae2015}:
+\begin{equation}
+  \hat{A}_t=\sum_{l=0}^{T-t-1}(\gamma\lambda)^{l}\delta_{t+l},\qquad
+  \delta_t=r_t+\gamma V(s_{t+1})-V(s_t),
+  \label{eq:gae}
+\end{equation}
+with $\lambda=0.95$. PPO maximizes the clipped
+surrogate~\cite{ppo2017}, derived from the TRPO trust
+region~\cite{trpo2015}:
+\begin{equation}
+  \mathcal{L}^{\mathrm{PPO}}(\theta)=\mathbb{E}_t\!\Big[\min\!\big(\rho_t(\theta)\hat{A}_t,\;
+  \mathrm{clip}(\rho_t(\theta),1-\epsilon,1+\epsilon)\hat{A}_t\big)\Big],\quad
+  \rho_t(\theta)=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\theta_{\text{old}}}(a_t\mid s_t)},
+  \label{eq:ppo}
+\end{equation}
+with $\epsilon=0.2$. The total loss adds a value term and an entropy bonus,
+\begin{equation}
+  \mathcal{L}=-\mathcal{L}^{\mathrm{PPO}}+0.5\,\mathcal{L}^{V}-0.001\,\mathcal{H}[\pi_\theta],
+  \qquad \mathcal{L}^{V}=\mathbb{E}_t\big[(V_\phi(s_t)-\hat{R}_t)^2\big].
+  \label{eq:ppoloss}
+\end{equation}
+
+Our loop performs \emph{one
+full-batch gradient step per episode} on \cref{eq:ppoloss} --- no PPO
+epochs, no minibatching. This is a deliberately minimal PPO: it keeps the
+on- and off-policy loops comparable and the analytic-gradient mix simple,
+but ``PPO'' here is weaker than a fully tuned implementation. The comparison
+of interest is relative (PPO vs.\ GPPO, SAC vs.\ GSAC), and all four share
+this budget.
+
+We use PPO as the on-policy baseline, rather than a
+different on-policy algorithm, because it is exactly the update the
+HydroGym paper's GPPO result is built on top of~\cite{hydrogym2026}:
+answering whether that result survives a chaotic regime requires holding
+the base update fixed and changing only the analytic-gradient mixing
+(\cref{sec:gppo}), not also switching algorithms. Its clipped surrogate also
+gives a clean model-free-only control arm for the on-policy row of the
+$2\times 2$ design (\cref{fig:design}).
+
+\subsection{SAC: off-policy baseline}
+\label{sec:sac}
+
+SAC is an off-policy, maximum-entropy actor-critic method: transitions are
+stored in a replay buffer and resampled many times, so one environment step
+contributes to many gradient updates instead of one. Its actor is a
+squashed Gaussian whose action is drawn by reparameterized sampling, so the
+entropy-regularized objective can be differentiated through the sampled
+action directly rather than estimated by a likelihood-ratio term.
+
+SAC and its maximum-entropy objective are due to Haarnoja et
+al.~\cite{sac2018,sacapps2018}, building on Soft
+Q-learning~\cite{softq2017}; its twin critics adopt the overestimation-bias
+fix introduced for off-policy actor-critic methods by
+TD3~\cite{fujimoto2018td3}, and the reparameterized actor gradient traces to
+the stochastic backpropagation of Rezende et
+al.~\cite{rezende2014stochastic}, the same mechanism used earlier for
+deterministic actors in DDPG~\cite{lillicrap2016ddpg}. SAC uses twin
+$Q$-critics $Q_{\psi_1},Q_{\psi_2}$ and target networks to optimize:
+\begin{equation}
+  J_{\mathrm{ME}}(\pi)=\mathbb{E}\!\left[\textstyle\sum_t r(s_t,a_t)+\alpha\,\mathcal{H}\!\big(\pi(\cdot\mid s_t)\big)\right],
+  \label{eq:sacobj}
+\end{equation}
+with fixed temperature $\alpha=0.1$ (not auto-tuned). The actor and critic
+losses are
+\begin{align}
+  J_\pi(\varphi)     &=\mathbb{E}_{s\sim\mathcal{D},\,a\sim\pi_\varphi}\!\big[\alpha\log\pi_\varphi(a\mid s)-\min_i Q_{\psi_i}(s,a)\big],
+  \label{eq:sacactor}\\
+  J_Q(\psi_i)        &=\mathbb{E}_{(s,a,r,s')\sim\mathcal{D}}\!\Big[\big(Q_{\psi_i}(s,a)-y\big)^2\Big],\quad
+  y=r+\gamma\big(\min_j Q_{\bar\psi_j}(s',a')-\alpha\log\pi_\varphi(a'\mid s')\big),
+  \label{eq:saccritic}
+\end{align}
+with soft target updates
+$\bar\psi_i\leftarrow(1-\tau_s)\bar\psi_i+\tau_s\psi_i$, $\tau_s=0.005$. Per
+episode, the rollout's 15 transitions are added to a replay buffer $\mathcal{D}$
+(capacity $=n_{\text{ep}}\times 15$) and 10 gradient updates are performed
+with batch size 64.
+
+SAC is the natural off-policy counterpart to PPO
+along exactly the factor this study varies (\cref{fig:design}): both
+optimize a stochastic policy with an actor-critic architecture, so replacing
+PPO's rollout-and-discard loop with SAC's replay buffer isolates the
+on-/off-policy factor without also changing the policy family, as switching
+to a deterministic actor (DDPG/TD3) would. Its replay buffer also gives the
+off-policy family a mechanism, buffer dilution, that PPO structurally lacks;
+\cref{sec:buffer} uses this to explain why on-policy and off-policy runs can
+behave differently immediately after a chaotic-regime trigger episode even
+when neither family is more failure-prone on average. We sample the buffer
+uniformly rather than by TD-error priority~\cite{schaul2016per}, so that any
+such difference is attributable to the on-/off-policy structure itself and
+not to a secondary sampling scheme.
+
+\subsection{Analytic policy gradient}
+\label{sec:analytic}
+
+The analytic gradient is the derivative of a short rollout's accumulated
+reward with respect to the policy parameters, obtained by unrolling the
+policy's \emph{deterministic mean} action through the differentiable solver
+and differentiating end-to-end with reverse-mode automatic differentiation.
+It is a low-variance but biased estimator, so its length is capped at
+$H=6$ steps and it is mixed with the model-free gradient at a fixed 50/50
+weight rather than trusted alone (\cref{fig:analytic}).
+
+Backpropagating through a rollout is the classical
+backpropagation-through-time construction~\cite{werbos1990bptt}; SHAC~\cite{shac2022}
+and AHAC~\cite{ahac2024} apply the same short-horizon truncation to
+differentiable simulators, and Metz et al.~\cite{metz2021} and Parmas et
+al.~\cite{parmas2018pipps} show that such backpropagated gradients can
+explode and lose direction under chaotic dynamics. Over $H=6$ steps we
+forward-propagate the policy's mean action (no sampling, so the whole chain
+stays smooth) and differentiate the negative accumulated reward:
+\begin{equation}
+  \Lan(\theta)=-\sum_{t=1}^{H}r\big(s_t,a_\mu(s_t;\theta)\big),\qquad
+  s_t=f_{\mathrm{sim}}(s_{t-1},a_\mu(s_{t-1};\theta);\Re),\qquad
+  \gan=\nabla_\theta\Lan(\theta),
+  \label{eq:analytic}
+\end{equation}
+computed by \texttt{jax.grad}. The final gradient mixes $\gan$ with the
+model-free gradient $g_{\mathrm{mf}}\in\{g_{\mathrm{PPO}},g_\pi\}$ at equal
+weight:
+\begin{equation}
+  g_{\mathrm{final}}=\beta\,\gan+(1-\beta)\,g_{\mathrm{mf}},\qquad \beta=0.5,
+  \label{eq:mix}
+\end{equation}
+the $\alpha=0.5$ special case of the $\alpha$-graded estimator of Suh et
+al.~\cite{suh2022}, of the total-gradient decomposition of Parmas and
+Sugiyama~\cite{parmas2018total}, and the non-adaptive limit of the GI-PPO
+$\alpha$-policy~\cite{gippo2023}. \Cref{eq:mix} is the only structural
+difference between PPO and GPPO, and between SAC and GSAC.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}
+  % forward rollout, row 1
+  \node[block] (pi0) at (0,0) {$\pi_\theta$};
+  \node[block] (a1)  at (2.5,0) {$a_\mu(s_0)$};
+  \node[envblock] (f1) at (5.0,0) {$f_{\mathrm{sim}}$};
+  \node[block] (s1)  at (7.5,0) {$s_1$};
+  \node[databox] (r1) at (10.0,0) {$r_1$};
+  % forward rollout, row 2
+  \node[block] (a2)  at (7.5,-2.5) {$a_\mu(s_1)$};
+  \node[envblock] (f2) at (10.0,-2.5) {$f_{\mathrm{sim}}$};
+  \node[font=\small] (dots) at (12.0,-2.5) {$\cdots$};
+  \node[databox] (rH) at (13.6,-2.5) {$r_H$};
+  \node[anblock] (L) at (13.6,-5.0) {$\displaystyle \Lan=-\sum_{t=1}^{H}r_t$};
+
+  \draw[flow] (pi0)--(a1); \draw[flow] (a1)--(f1); \draw[flow] (f1)--(s1);
+  \draw[flow] (s1)--(r1);
+  \draw[flow] (s1)--(a2);
+  \draw[flow] (a2)--(f2); \draw[flow] (f2)--(dots); \draw[flow] (dots)--(rH);
+  \draw[flow] (rH)--(L);
+  \draw[flow] (r1.east) -- (15.0,0) -- (15.0,-5.0) -- (L.east);
+
+  % backward analytic gradient: one bus under the rollout, orthogonal drops
+  \draw[grad] (L.west) -- (2.5,-5.0) -- (a1.south);
+  \draw[grad] (5.0,-5.0) -- (f1.south);
+  \draw[grad] (7.5,-5.0) -- (a2.south);
+  \draw[grad] (10.0,-5.0) -- (f2.south);
+  \node[font=\scriptsize,text=red!70!black,anchor=north] at (6.2,-5.15)
+    {$\nabla_\theta$ through solver \& policy};
+
+  % mixer and optimiser
+  \node[block,fill=yellow!12] (mix) at (13.6,-7.4)
+    {$g_{\mathrm{final}}=\tfrac12\gan+\tfrac12 g_{\mathrm{mf}}$};
+  \node[block] (mf) at (8.4,-7.4) {$g_{\mathrm{mf}}$\\(PPO / SAC actor)};
+  \node[block] (adam) at (18.0,-7.4) {Adam\\ $\theta\!\leftarrow\!\theta-\eta g_{\mathrm{final}}$};
+  \draw[grad] (L) -- (mix);
+  \draw[flow] (mf) -- (mix);
+  \draw[flow] (mix) -- (adam);
+  \draw[flow] (adam.south) -- (18.0,-9.2) -- (0,-9.2) -- (pi0.south);
+\end{tikzpicture}}
+\caption{Analytic-gradient computation graph (\cref{eq:analytic,eq:mix}).
+Solid arrows: forward rollout of the \emph{deterministic mean} action
+through the differentiable solver for $H=6$ steps. Dashed red arrows:
+reverse-mode differentiation of the accumulated reward $\Lan$ with respect to
+$\theta$ via \texttt{jax.grad}. The analytic gradient is averaged 50/50 with
+the model-free gradient and applied with Adam. Replacing the mixer with
+$g_{\mathrm{final}}=g_{\mathrm{mf}}$ recovers plain PPO / SAC.}
+\label{fig:analytic}
+\end{figure}
+
+We fix $\beta=0.5$ and $H=6$
+rather than adapting either online, because this study asks whether
+analytic-gradient injection helps or hurts as the regime turns chaotic, and
+an adaptive scheme such as GI-PPO's $\alpha$-policy or SAPO's entropy-based
+smoothing would let the algorithm partially opt out of the analytic term
+exactly when the chaotic regime makes it unreliable --- confounding the
+effect under test. \Cref{sec:gppo,sec:gsac} apply this same fixed rule to
+the on-policy and off-policy actor gradient respectively, so that GPPO and
+GSAC differ from PPO and SAC by exactly one mechanism.
+
+\subsection{GPPO: on-policy variant}
+\label{sec:gppo}
+
+GPPO adds the analytic-gradient mix of \cref{eq:mix} to the PPO update: from
+the same fixed reset state, a deterministic $H=6$-step analytic rollout runs
+alongside the standard stochastic on-policy rollout, and the two resulting
+gradients are averaged before a single Adam step (\cref{fig:gppo,alg:gppo}).
+Every other setting --- rollout length, GAE, the clip range, network
+architecture, and learning rate --- is identical to plain PPO (\cref{sec:ppo}).
+
+This is the same mechanism as the HydroGym paper's GPPO, reported to cut
+training iterations by at least \SI{65}{\percent} over PPO on Kolmogorov
+flow~\cite{hydrogym2026}. That paper does not report its horizon length or
+mixing weight, so ours follow the general short-horizon-and-mix recipe of
+SHAC, AHAC, and GI-PPO (\cref{sec:analytic}) rather than an attempt to match
+unpublished hyperparameters.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[node distance=6mm and 10mm]
+  \node[block] (reset) {reset $\to s_0$};
+  \node[block,right=of reset] (roll) {stochastic rollout\\ $T=15$, $a\!\sim\!\mathcal{N}$};
+  \node[block,right=of roll] (gae) {GAE \eqref{eq:gae}\\ $\hat A_t,\hat R_t$};
+  \node[block,right=of gae] (gppo) {$g_{\mathrm{PPO}}=\nabla_\theta\mathcal{L}$\\ \eqref{eq:ppoloss}, clip $\epsilon{=}0.2$};
+  \node[block,right=of gppo,fill=yellow!12] (mix) {mix \eqref{eq:mix}\\ $\beta=0.5$};
+  \node[block,right=of mix] (adam) {single Adam step\\ $\eta=3\!\times\!10^{-4}$};
+  \node[anblock,below=10mm of gae] (an) {analytic branch\\ $H{=}6$, mean action\\ $\gan$ \eqref{eq:analytic}};
+  \draw[flow] (reset)--(roll); \draw[flow] (roll)--(gae); \draw[flow] (gae)--(gppo);
+  \draw[flow] (gppo)--(mix); \draw[flow] (mix)--(adam);
+  \draw[flow] (reset.south) |- (an.west);
+  \draw[grad] (an.east) -| (mix.south);
+  % next episode: below everything, re-enter reset from the left
+  \coordinate (low) at ($(an.south)+(0,-8mm)$);
+  \draw[flow] (adam.south) -- (adam.south |- low) -- ($(reset.west |- low)+(-6mm,0)$)
+      -- ($(reset.west)+(-6mm,0)$) -- (reset.west);
+  \node[font=\scriptsize,above,anchor=south] at ($(reset.west |- low)+(2cm,0)$) {next episode};
+\end{tikzpicture}}
+\caption{GPPO training loop (one episode). The analytic branch is a
+deterministic 6-step unroll that runs in parallel with the standard on-policy
+update; the two gradients are averaged before a single Adam step. Removing
+the red branch gives PPO.}
+\label{fig:gppo}
+\end{figure}
+
+\begin{algorithm}[t]
+\caption{GPPO --- one training episode ($\beta=0.5$, $H=6$)}
+\label{alg:gppo}
+\DontPrintSemicolon
+\KwIn{policy $\theta$, value $\phi$, optimizer state, fixed reset state $s_0$}
+$\tau \leftarrow \textproc{rollout}(\pi_\theta, s_0)$ for $T=15$ steps
+  \tcp*{sample $a_t\sim\mathcal{N}(a_\mu(s_t),\sigma^2)$}
+$\hat A,\hat R \leftarrow \textproc{GAE}(\tau;\gamma{=}0.99,\lambda{=}0.95)$\;
+$g_{\mathrm{PPO}} \leftarrow \nabla_\theta\big[-\mathcal{L}^{\mathrm{PPO}}(\theta;\tau,\hat A)+0.5\,\mathcal{L}^{V}(\phi;\tau,\hat R)-0.001\,\mathcal{H}(\pi_\theta)\big]$\;
+\tcp{analytic branch: deterministic, differentiable, short horizon}
+$\Lan(\theta) \leftarrow -\sum_{t=1}^{H} r\big(f_{\mathrm{sim}}^{\,t}(s_0,a_\mu(\cdot\,;\theta))\big)$\;
+$\gan \leftarrow \nabla_\theta \Lan(\theta)$ \tcp*{\texttt{jax.grad} through the solver}
+$g \leftarrow \beta\,\gan + (1-\beta)\,g_{\mathrm{PPO}}$\;
+$\theta \leftarrow \textproc{Adam}(\theta, g;\ \eta{=}3\!\times\!10^{-4})$ \tcp*{single full-batch step}
+\KwOut{$\theta,\phi$; \; logs $\big(\lVert\gan\rVert,\ \mathrm{RMS}\lvert a_t\rvert,\ \max\lvert a_t\rvert,\ \sum_t r_t\big)$}
+PPO is this algorithm with the analytic branch (the $\Lan$, $\gan$, and mixing steps) removed, so that $g \leftarrow g_{\mathrm{PPO}}$.
+\end{algorithm}
+
+GPPO is the on-policy arm of the $2\times 2$
+design and the direct object of the reproduction question this paper asks:
+does the reported sample-efficiency gain hold, under the same fixed recipe,
+at a chaotic operating point where the analytic gradient's premises ---
+smooth, low-variance backpropagation through the solver --- are not
+expected to hold? \cref{sec:results} answers this at $\Re=45$ (yes) and
+$\Re=300$ (no seed-robust effect).
+
+\subsection{GSAC: off-policy variant}
+\label{sec:gsac}
+
+GSAC applies the same analytic-gradient mix to the SAC actor rather than to
+PPO's surrogate: after each episode's rollout and ten off-policy
+critic-and-actor updates, one further actor step mixes the last actor
+gradient, $g_{\mathrm{mf}}=g_\pi=\nabla_\varphi J_\pi(\varphi)$ from
+\cref{eq:sacactor}, with a deterministic $H=6$-step analytic rollout from
+the reset state (\cref{fig:gsac,alg:gsac}). The critics, target networks,
+and replay mechanics are otherwise unchanged from plain SAC (\cref{sec:sac}).
+
+This follows SAPO's core motivation of combining an off-policy,
+maximum-entropy actor with an analytic gradient~\cite{sapo2025}, but
+targets HydroGym's Kolmogorov flow rather than SAPO's rigid/deformable-body
+platform, and uses the same fixed 50/50 mix as GPPO (\cref{sec:analytic})
+rather than SAPO's entropy-based smoothing. To our knowledge this is the
+first application of an off-policy, maximum-entropy analytic-gradient
+method to a fluid-dynamics control task.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[node distance=6mm and 9mm]
+  \node[block] (roll) {rollout $T{=}15$\\ $\pi_\varphi$};
+  \node[databox,right=of roll] (buf) {replay buffer $\mathcal{D}$\\ cap.\ $500\times 15$};
+  \node[block,right=of buf] (batch) {sample\\ batch 64};
+  \node[block,above=8mm of batch] (crit) {twin critics\\ $\psi_1,\psi_2$ \eqref{eq:saccritic}\\ $+$ targets $\bar\psi$};
+  \node[block,right=of batch] (act) {actor grad $g_\pi$\\ \eqref{eq:sacactor}};
+  \node[draw,dashed,rounded corners,fit=(batch)(crit)(act),inner sep=6pt] (inner) {};
+  \node[font=\scriptsize,anchor=north] at ($(inner.south)+(0,-1pt)$) {$\times\,10$ updates / episode};
+  \node[anblock,below=14mm of act] (an) {analytic branch\\ on actor, $H{=}6$\\ $\gan$ \eqref{eq:analytic}};
+  \node[block,right=14mm of act,fill=yellow!12] (mix) {mix \eqref{eq:mix}\\ $\varphi\!\leftarrow$ Adam};
+  \coordinate (top) at ($(inner.north)+(0,7mm)$);
+  \draw[flow] (roll)--(buf); \draw[flow] (buf)--(batch);
+  \draw[flow] (batch)--(crit); \draw[flow] (crit.east) -| (act.north);
+  \draw[flow] (act.east) -- (mix.west);
+  \draw[grad] (an.east) -| (mix.south);
+  \draw[flow] (buf.south) |- (an.west);
+  \draw[flow] (mix.north) -- (mix.north |- top) -- (roll.north |- top) -- (roll.north);
+\end{tikzpicture}
+\caption{GSAC training loop (one episode). Ten off-policy critic$+$actor
+updates on replay batches are followed by a single analytic actor step
+(6-step deterministic unroll from the reset state). Removing the red branch
+and the mixer gives SAC.}
+\label{fig:gsac}
+\end{figure}
+
+\begin{algorithm}[t]
+\caption{GSAC --- one training episode ($\beta=0.5$, $H=6$)}
+\label{alg:gsac}
+\DontPrintSemicolon
+\KwIn{actor $\varphi$, critics $\psi_1,\psi_2$, targets $\bar\psi_1,\bar\psi_2$, replay buffer $\mathcal{D}$, reset state $s_0$}
+$\tau \leftarrow \textproc{rollout}(\pi_\varphi, s_0)$ for $T=15$ steps;\quad $\mathcal{D} \leftarrow \mathcal{D}\cup\tau$\;
+\For{$k = 1 \ldots 10$}{
+  $B \leftarrow \textproc{sample}(\mathcal{D}, 64)$\;
+  \lFor{$i\in\{1,2\}$}{$\psi_i \leftarrow \textproc{Adam}\big(\psi_i, \nabla_{\psi_i} J_Q(\psi_i; B)\big)$}
+  $g_\pi \leftarrow \nabla_\varphi\,\mathbb{E}_{s\in B}\big[\alpha\log\pi_\varphi(a\mid s)-\min_i Q_{\psi_i}(s,a)\big],\ a\sim\pi_\varphi(\cdot\mid s),\ \alpha=0.1$\;
+  $\varphi \leftarrow \textproc{Adam}(\varphi, g_\pi)$\;
+  $\bar\psi_i \leftarrow (1-\tau_s)\bar\psi_i + \tau_s\psi_i,\quad \tau_s=0.005$\;
+}
+\tcp{analytic branch on the actor, after the SAC updates}
+$\gan \leftarrow \nabla_\varphi\big[-\sum_{t=1}^{H} r\big(f_{\mathrm{sim}}^{\,t}(s_0,a_\mu(\cdot\,;\varphi))\big)\big]$\;
+$\varphi \leftarrow \textproc{Adam}\big(\varphi,\ \beta\,\gan + (1-\beta)\,g_\pi\big)$ \tcp*{$g_\pi$ from the last inner step}
+\KwOut{$\varphi,\psi$; \; logs $\big(\lVert\gan\rVert,\ \mathrm{RMS}\lvert a_t\rvert,\ \max\lvert a_t\rvert,\ \sum_t r_t\big)$}
+SAC is this algorithm with the analytic branch (the final $\gan$ and mixing steps) removed.
+\end{algorithm}
+
+GSAC completes the $2\times 2$ design
+(\cref{fig:design}) and lets this study ask its second question directly:
+does an off-policy replay buffer tolerate the analytic gradient's
+chaotic-regime instability better than an on-policy rollout, or does adding
+a replay buffer simply add its own failure mode? Because GPPO and GSAC
+share the identical analytic branch (\cref{eq:analytic}) and mixing rule
+(\cref{eq:mix}), any difference in chaotic-regime robustness between them is
+attributable to the on-/off-policy factor rather than to a different
+analytic-gradient implementation.
+
+GAE, PPO clipping, and the 50/50
+analytic/model-free mix are hand-rolled in plain JAX/optax and kept
+identical in form across the PPO and SAC training scripts. Both scripts
+additionally log per-episode action amplitude (RMS and absolute max) for the
+trigger-episode diagnostic of \cref{sec:mechanism}.

@@ -1,0 +1,144 @@
+%% ===========================================================================
+%%  Gradient at the Edge of Chaos
+%%  Journal manuscript -- template-neutral single-column build (elsarticle).
+%%  Target venue class: Machine Learning: Science and Technology / Neural Networks.
+%%  Swap \documentclass for the venue class when the venue is locked; the section
+%%  files under sections/ are class-independent.
+%% ===========================================================================
+\documentclass[preprint,12pt,3p]{elsarticle}
+
+% ---- math -----------------------------------------------------------------
+\usepackage{amsmath,amssymb,amsfonts,bm}
+\usepackage{mathtools}
+
+% ---- figures / tables ---------------------------------------------------------
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{siunitx}
+\sisetup{detect-weight=true,detect-family=true}
+\usepackage{subcaption}
+\usepackage{xcolor}
+
+% ---- algorithms ---------------------------------------------------------------
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\providecommand{\textproc}[1]{\textsc{#1}}
+
+% ---- diagrams ---------------------------------------------------------------
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,shapes.misc}
+
+\tikzset{
+  block/.style   = {draw, rounded corners=2pt, align=center, font=\small,
+                     minimum height=8mm, inner sep=4pt, fill=blue!4},
+  envblock/.style = {draw, rounded corners=2pt, align=center, font=\small,
+                     minimum height=8mm, inner sep=4pt, fill=green!6},
+  anblock/.style  = {draw, rounded corners=2pt, align=center, font=\small,
+                     minimum height=8mm, inner sep=4pt, fill=red!6},
+  databox/.style  = {draw, align=center, font=\small, minimum height=8mm,
+                     inner sep=4pt, fill=gray!8},
+  flow/.style     = {-{Latex[length=2mm]}, thick},
+  grad/.style     = {-{Latex[length=2mm]}, thick, dashed, red!70!black},
+}
+
+% ---- misc -----------------------------------------------------------------
+\usepackage{microtype}
+\emergencystretch=2em
+\usepackage[hidelinks]{hyperref}
+\usepackage{cleveref}
+\crefname{equation}{Eq.}{Eqs.}
+\crefname{figure}{Fig.}{Figs.}
+\crefname{table}{Table}{Tables}
+\crefname{section}{Section}{Sections}
+\crefname{algocf}{Algorithm}{Algorithms}
+
+\renewcommand{\Re}{\mathit{Re}}
+\newcommand{\gan}{g_{\mathrm{an}}}
+\newcommand{\Lan}{\mathcal{L}_{\mathrm{an}}}
+\newcommand{\dd}{\mathrm{d}}
+
+\journal{Machine Learning: Science and Technology}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Gradient at the Edge of Chaos: Why Analytic-Gradient
+Reinforcement Learning Has No Seed-Robust Advantage on Chaotic
+Kolmogorov Flow}
+
+\author[su]{Cem \"Ozkurt}
+\ead{TODO@institutional.address}
+
+\author[su]{Ey\"up Altu\u{g} Tun\c{c}}
+
+\author[su]{Muhammed Emin Onay}
+
+\author[su]{Haktan Yusuf G\"ulo\u{g}lu}
+\ead{haktanguloglu24@gmail.com}
+
+\affiliation[su]{organization={Sakarya University, National Technology
+Workshop, Artificial Intelligence Center},
+                 country={T\"urkiye}}
+
+\begin{abstract}
+Does injecting an analytic
+(backpropagated-through-the-simulator) policy gradient help or hurt as a
+fluid-flow control task becomes chaotic, and does off-policy reinforcement
+learning (RL) tolerate the resulting gradient instability better than
+on-policy RL? The HydroGym paper reports that Gradient-Enhanced PPO (GPPO)
+cuts training iterations by at least \SI{65}{\percent} relative to PPO, shown
+at a single Reynolds number and seed. We evaluate PPO, GPPO, SAC, and a
+gradient-enhanced SAC variant (GSAC), the first transfer of off-policy
+maximum-entropy analytic-gradient RL to fluid dynamics, on the real
+\mbox{\texttt{hydrogym.jax}} Kolmogorov-flow environment at a regular
+($\Re=45$) and a chaotic ($\Re=300$) operating point over five seeds. At
+$\Re=45$, GPPO reaches PPO's best reward in substantially fewer episodes in 4
+of 5 seeds, reproducing the reported mechanism. At $\Re=300$, all four
+algorithms eventually diverge, and the first-divergence episode is dominated
+by the seed, not the algorithm: an exact permutation test separates no pair
+of algorithms (all $p\ge 0.19$). The reproducible findings are mechanistic:
+the break is sudden and precursor-free; the replay buffer's size at the
+trigger determines whether a brief post-trigger survival window can appear;
+and in a rare mode the flow diverges within about two episodes regardless of
+algorithm. Analytic-gradient injection thus imposes no seed-robust ordering
+on chaotic-regime training stability.
+\end{abstract}
+
+\begin{keyword}
+analytic policy gradients \sep differentiable simulation \sep
+reinforcement learning for flow control \sep chaotic dynamics \sep
+training stability \sep Kolmogorov flow \sep proximal policy optimization
+\sep soft actor-critic
+\end{keyword}
+
+\end{frontmatter}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_methods}
+\input{sections/04_setup}
+\input{sections/05_results}
+\input{sections/06_mechanism}
+\input{sections/07_discussion}
+\input{sections/08_conclusion}
+
+\section*{Acknowledgment}
+The authors thank Sakarya University's National Technology Workshop
+Artificial Intelligence Center for the computational resources used in this
+study.
+
+\section*{Declaration of competing interest}
+The authors declare no competing interests.
+
+\section*{Data and code availability}
+The experiment code, pinned environment specification, sweep drivers, and
+every per-configuration result dump (episode rewards, analytic-gradient
+norms, action-amplitude logs, wall times) will be released as a standalone
+repository and archived with a DOI on Zenodo upon publication.
+
+\bibliographystyle{elsarticle-num}
+\bibliography{refs}
+
+\end{document}

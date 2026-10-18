@@ -12,7 +12,7 @@ tectonic -X compile main.tex   # (bibtex'i otomatik çalıştırır)
 ```
 
 Elle: `pdflatex main` → `bibtex main` → `pdflatex main` → `pdflatex main`.
-Çıktı: `main.pdf` (19 sayfa).
+Çıktı: `main.pdf` (16 sayfa).
 
 ### Overleaf
 New Project → Upload Project → bu klasörün zip'i. Ana dosya `main.tex`,
@@ -42,7 +42,7 @@ derleyici **pdfLaTeX**. CAS sınıfı Overleaf'te hazır; zip'teki `.cls`/`.sty`
 - `main.tex` içinde iki küçük CAS yaması var (`\ExplSyntaxOn` bloğu):
   (1) ilk-sayfa alt bilgisine "Elsevier" yerine dergi adını yazar;
   (2) ORCID verilmediğinde boş "ORCID(s):" dipnotunu bastırmaz.
-  Gerçek ORCID eklemek için: `\author[1]{Haktan G\"ulo\u{g}lu}[orcid=....]`.
+  ORCID'ler `\author[n]{Ad}[orcid=...]` ile eklendi; sorumlu yazar Cem Özkurt (`\cormark`).
 - `\credit{...}` + `\printcredits` → sonda **CRediT authorship contribution
   statement** bölümünü üretir.
 

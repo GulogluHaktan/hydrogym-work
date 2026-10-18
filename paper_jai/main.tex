@@ -96,27 +96,43 @@
 \title[mode = title]{Gradient at the Edge of Chaos: Why Analytic-Gradient
 Reinforcement Learning Has No Seed-Robust Advantage on Chaotic Kolmogorov Flow}
 
-\author[1]{Cem \"Ozkurt}
+\author[1]{Cem \"Ozkurt}[orcid=0000-0002-1251-7715]
 \cormark[1]
-\ead{TODO@institutional.address}
+\ead{cemozkurt@sakarya.edu.tr}
 \credit{Conceptualization, Methodology, Investigation,
 Writing -- original draft, Project administration}
 
-\author[1]{Ey\"up Altu\u{g} Tun\c{c}}
-\credit{Software, Validation, Investigation,
-Writing -- review \& editing}
-
-\author[1]{Muhammed Emin Onay}
+\author[2]{Muhammed Emin Onay}[orcid=0009-0000-0454-4986]
 \credit{Data curation, Visualization, Investigation,
 Writing -- review \& editing}
 
-\author[1]{Haktan Yusuf G\"ulo\u{g}lu}[orcid=0009-0007-9429-6154]
-\ead{haktanguloglu24@gmail.com}
+\author[2]{Ey\"up Altu\u{g} Tun\c{c}}[orcid=0009-0007-5166-8077]
+\credit{Software, Validation, Investigation,
+Writing -- review \& editing}
+
+\author[3]{Ahmet Kutay K\"u\c{c}\"ukler}[orcid=0009-0007-0202-016X]
+\credit{Investigation, Validation, Writing -- review \& editing}
+
+\author[3]{Haktan Yusuf G\"ulo\u{g}lu}[orcid=0009-0007-9429-6154]
 \credit{Conceptualization, Software, Formal analysis, Resources,
 Writing -- original draft, Writing -- review \& editing}
 
-\affiliation[1]{organization={Sakarya University, National Technology
-Workshop, Artificial Intelligence Center},
+\affiliation[1]{organization={Department of Data Science and Analytics,
+Faculty of Computer and Information Sciences, Sakarya University},
+                addressline={Esentepe Campus, Serdivan},
+                postcode={54187},
+                city={Sakarya},
+                country={T\"urkiye}}
+
+\affiliation[2]{organization={Department of Computer Engineering,
+Faculty of Computer and Information Sciences, Sakarya University},
+                addressline={Esentepe Campus, Serdivan},
+                postcode={54187},
+                city={Sakarya},
+                country={T\"urkiye}}
+
+\affiliation[3]{organization={Department of Computer Engineering,
+Sakarya University of Applied Sciences},
                 city={Sakarya},
                 country={T\"urkiye}}
 
@@ -177,6 +193,17 @@ The authors thank Sakarya University's National Technology Workshop
 Artificial Intelligence Center for the computational resources used in this
 study.
 
+\section*{Funding}
+This research did not receive any specific grant from funding agencies in the
+public, commercial, or not-for-profit sectors.
+
+\section*{Declaration of generative AI and AI-assisted technologies in the writing process}
+During the preparation of this work the authors used Claude (Anthropic) in order
+to improve the language and readability of the manuscript and to assist with
+code and figure generation. After using this tool, the authors reviewed and
+edited the content as needed and take full responsibility for the content of
+the published article.
+
 \section*{Declaration of competing interest}
 The authors declare no competing interests.
 
@@ -196,35 +223,36 @@ repository and archived with a DOI on Zenodo upon publication.
 %% matching the \bio{photo-haktan} pattern used for the last author.  JAI
 %% requires a photograph for every author of a full-length article.
 \bio{}
-Cem \"Ozkurt is a researcher at Sakarya University's National Technology
-Workshop Artificial Intelligence Center, where the present study was carried
-out. He conceived and designed the study, led its methodology and
-administered the project.
+Cem \"Ozkurt is a researcher in the Department of Data Science and Analytics,
+Faculty of Computer and Information Sciences, Sakarya University. He conceived
+and designed the study, led its methodology and administered the project.
 \endbio
 
 \bio{}
-Ey\"up Altu\u{g} Tun\c{c} is an undergraduate student in Mechatronics
-Engineering at Sakarya University of Applied Sciences and works at Sakarya
-University's National Technology Workshop Artificial Intelligence Center. In
-this study he contributed to the software implementation and to the
+Muhammed Emin Onay is affiliated with the Department of Computer Engineering,
+Faculty of Computer and Information Sciences, Sakarya University. In this study
+he contributed to the curation of the per-run experimental data and to the
+visualisation of the breaking-point and gradient-norm results.
+\endbio
+
+\bio{}
+Ey\"up Altu\u{g} Tun\c{c} is affiliated with the Department of Computer
+Engineering, Faculty of Computer and Information Sciences, Sakarya University.
+In this study he contributed to the software implementation and to the
 validation of the training pipeline across the five seeds.
 \endbio
 
 \bio{}
-Muhammed Emin Onay is an undergraduate student in Mechatronics Engineering at
-Sakarya University of Applied Sciences and works at Sakarya University's
-National Technology Workshop Artificial Intelligence Center. In this study he
-contributed to the curation of the per-run experimental data and to the
-visualisation of the breaking-point and gradient-norm results.
+Ahmet Kutay K\"u\c{c}\"ukler is affiliated with the Department of Computer
+Engineering, Sakarya University of Applied Sciences. In this study he
+contributed to the experimental runs and to the validation of the results.
 \endbio
 
 \bio{photo-haktan}
 Haktan Yusuf G\"ulo\u{g}lu graduated at the top of his class from Profilo
 Vocational and Technical Anatolian High School and is currently an
-undergraduate student in Computer Engineering at Sakarya University of
-Applied Sciences. He works as a student researcher at Sakarya University's
-National Technology Workshop Artificial Intelligence Center, where the
-present study was carried out. His research centers on reinforcement
+undergraduate student in the Department of Computer Engineering, Sakarya
+University of Applied Sciences. His research centers on reinforcement
 learning and large language models, with a particular interest in the
 stability of learning algorithms under complex, high-dimensional, and
 chaotic dynamics. This work is his first contribution to the

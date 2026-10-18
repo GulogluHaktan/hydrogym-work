@@ -8,8 +8,11 @@ Target class: Q1 ML+science venue (Machine Learning: Science and Technology, or 
 Final formatting (LaTeX `article` → target template) is deferred; author in this plain
 Markdown file, convert at the end via the `makale-latex-yazici` skill.
 
-**Authors:** Cem Özkurt (corresponding); Eyüp Altuğ Tunç; Muhammed Emin Onay; Haktan Yusuf Güloğlu
-**Affiliation:** Sakarya University, National Technology Workshop, Artificial Intelligence Center, Türkiye
+**Authors:** Cem Özkurt¹ (corresponding, ORCID 0000-0002-1251-7715); Muhammed Emin Onay² (0009-0000-0454-4986); Eyüp Altuğ Tunç² (0009-0007-5166-8077); Ahmet Kutay Küçükler³ (0009-0007-0202-016X); Haktan Yusuf Güloğlu³ (0009-0007-9429-6154)
+**Affiliations:**
+¹ Department of Data Science and Analytics, Faculty of Computer and Information Sciences, Sakarya University, Sakarya, Türkiye
+² Department of Computer Engineering, Faculty of Computer and Information Sciences, Sakarya University, Sakarya, Türkiye
+³ Department of Computer Engineering, Sakarya University of Applied Sciences, Sakarya, Türkiye
 
 ---
 

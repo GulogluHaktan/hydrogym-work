@@ -1,232 +1,155 @@
-<p align="center">
-<a rel="nofollow"><img alt="HydroGym Logo" src="assets/logo_200dpi.png"></a>
-</p>
+# HydroGym analytic-gradient RL on chaotic Kolmogorov flow
 
-<p align="center">
-<a href="https://github.com/astral-sh/ruff"><img alt="Ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json"></a>
-<a href="https://python.org/"><img alt="Language: Python" src="https://img.shields.io/badge/language-Python-orange.svg"></a>
-<a href="https://spdx.org/licenses/MIT.html"><img alt="License HydroGym" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-<a href="https://join.slack.com/t/hydrogym/shared_invite/zt-27u914dfn-UFq3CkaxiLs8dwZ_fDkBuA"><img alt="Slack" src="https://img.shields.io/badge/slack-hydrogym-brightgreen.svg?logo=slack"></a>
-</p>
+🇬🇧 English · 🇹🇷 [Türkçe](README.tr.md)
 
-# HydroGym: Reinforcement Learning for Fluid Dynamics
+**Does injecting an analytic (backpropagated-through-the-simulator) policy gradient help or hurt reinforcement learning as a fluid-flow control task becomes chaotic?**
 
-**61+ environments | 6 solver backends | 2D & 3D | Ready for RL training**
+We compare PPO, GPPO, SAC and a gradient-enhanced SAC (GSAC) on the real `hydrogym.jax` Kolmogorov-flow environment at a regular (Re=45) and a chaotic (Re=300) operating point over five seeds. This repository is a fork of [dynamicslab/hydrogym](https://github.com/dynamicslab/hydrogym) (see [README_UPSTREAM.md](README_UPSTREAM.md)) with our experiment code added.
 
-HydroGym is a comprehensive platform for applying reinforcement learning to fluid dynamics and flow control. With environments ranging from canonical benchmarks to turbulent flows, HydroGym provides a standardized Gymnasium-compatible interface for training RL agents on challenging CFD problems.
+![Four-algorithm comparison, 500 episodes](assets/demo.png)
 
-## Key Features
+*Training curves of PPO, GPPO, SAC and GSAC at both Reynolds numbers.*
 
-- **Diverse Environments**: 61+ pre-configured environments across 6 CFD solvers
-- **Standard RL Interface**: Gymnasium-compatible API works with Stable-Baselines3, RLlib, and other RL libraries
-- **Compute Efficient**: Highly optimized GPU & CPU backends for efficient RL deployment ranging from local workstations to exascale HPC systems
-- **Scalable**: MPI-parallelized solvers with distributed RL training support
-- **Multiple Backends**: Finite Element (Firedrake), Lattice Boltzmann (MAIA LBM), Finite Volume (MAIA FV), Spectral Element (NEK5000), Fully Differentiable solvers (JAX-Fluids)
-- **2D & 3D**: From simple 2D benchmarks to complex 3D turbulent flows (Re up to 400,000)
-- **Research-Ready**: Managed by a complementary HuggingFace repository
+## Summary
 
-## Quick Start with Docker (Recommended)
+| Problem | Method | Simulation / hardware | Paper |
+|---|---|---|---|
+| Effect of analytic-gradient injection on RL stability in regular vs. chaotic flow control | PPO, GPPO, SAC, GSAC; 5 seeds; exact permutation test | `hydrogym.jax` KolmogorovFlow (64x64), single consumer NVIDIA GPU | [paper/hydrogym-edge-of-chaos.pdf](paper/hydrogym-edge-of-chaos.pdf) |
 
-**We strongly recommend using our pre-configured Docker containers** for hassle-free setup:
+### System architecture
+
+![System architecture](assets/architecture.png)
+
+The real HydroGym Kolmogorov solver is wrapped by `FastKolmogorovFlow` (POC-scale time step and horizon); the learners live in `real_rl.py` and `sac_rl.py`, and results are stored as JSON and rendered into figures.
+
+### Flow diagram (how it works)
+
+```mermaid
+flowchart TD
+  A["Choose algorithm and Reynolds number<br/>PPO / GPPO / SAC / GSAC, Re=45 or 300"] --> B["Reset FastKolmogorovFlow<br/>(real hydrogym.jax solver)"]
+  B --> C["Roll out episode, policy picks forcing amplitudes"]
+  C --> D{"GPPO / GSAC?"}
+  D -- "no" --> E["Standard PPO / SAC update"]
+  D -- "yes" --> F["Backpropagate through simulator with jax.grad<br/>and mix with the RL gradient"]
+  E --> G["Log reward and gradient norm"]
+  F --> G
+  G --> H{"Non-finite values or divergence?"}
+  H -- "yes" --> I["Record breaking episode"]
+  H -- "no" --> J{"Episodes left?"}
+  J -- "yes" --> C
+  J -- "no" --> K["Save JSON results and logs"]
+  I --> K
+  K --> L["plot_paper_n5.py renders the figures"]
+```
+
+## Selected results
+
+### Result 1: Regular regime (Re=45): training curves
+
+GPPO reaches PPO's best reward in substantially fewer episodes in 4 of 5 seeds, reproducing the mechanism reported by the HydroGym paper.
+
+![](plots/sonuc_1.png)
+
+### Result 2: Regular regime (Re=45): final reward
+
+Final reward of the four algorithms over five seeds.
+
+![](plots/sonuc_2.png)
+
+### Result 3: Chaotic regime (Re=300): training curves
+
+All four algorithms eventually diverge.
+
+![](plots/sonuc_3.png)
+
+### Result 4: Chaotic regime (Re=300): breaking episode
+
+The first-divergence episode is dominated by the seed, not the algorithm: an exact permutation test separates no pair of algorithms (all p >= 0.19).
+
+![](plots/sonuc_4.png)
+
+### Result 5: Mechanism of the break
+
+The break is sudden and precursor-free; the replay buffer size at the trigger decides whether a brief post-trigger survival window appears.
+
+![](plots/sonuc_5.png)
+
+### Result 6: Analytic-gradient norms
+
+Gradient-norm behaviour that accompanies the chaotic-regime break.
+
+![](plots/sonuc_6.png)
+
+*All figures are in the `plots/` folder.*
+
+## Installation
+
+Requirements: Linux, Python 3.10 or 3.11, NVIDIA GPU with driver >= 550 (no system CUDA needed), about 8 GB of free disk.
 
 ```bash
-# For NVIDIA GPUs (CUDA)
-docker pull clagemann/hydrogym-nvhpc-26.1_cuda-12.9_hopper_blackwell:latest
-# or
-docker pull clagemann/hydrogym-nvhpc-26.1_cuda-12.9_turing_ampere:latest
-
-# For AMD GPUs (ROCm)
-docker pull clagemann/hydrogym-rocm-6.3.3:latest
-
-# Run container
-docker run -it --gpus all clagemann/hydrogym-nvhpc-26.1_cuda-12.9_turing_ampere:latest
+git clone https://github.com/GulogluHaktan/hydrogym-work.git
+cd hydrogym-work/hydrogym_real   # if the repo root is hydrogym_real itself, stay in the root
+bash setup_env.sh                # creates ../venv with GPU JAX (about 6 GB)
+source ../venv/bin/activate
+python -c "import jax, hydrogym.jax; print(jax.devices())"
 ```
-## Available Environments
 
-HydroGym provides **61 environments** across 6 solver backends:
+## Usage
 
-| Solver Backend | Count | Description | Dimensions |
-|----------------|-------|-------------|------------|
-| **Firedrake** (FEM) | 20 | Canonical flow control benchmarks | 2D |
-| **MAIA LBM** | 55 | Lattice Boltzmann method environments | 2D, 3D |
-| **MAIA Structured FV** | 8 | High-Reynolds turbulent boundary layers | 3D |
-| **NEK5000** | 2 | Spectral element turbulent channel flow | 3D |
-| **JAX** | 2 | Differentiable fluid dynamics | 2D, 3D |
-| **JAX-Fluids** | 2 | Compressible shock vector control | 2D, 3D |
-
-### Environment Categories
-
-**Canonical Benchmarks** (Low-Mid Re):
-- Cylinder wake (Re=100-3900, 2D/3D)
-- Rotating cylinder (Re=100-3900, 2D/3D)
-- Pinball (Re=30-150, 2D/3D)
-- Cavity flow (Re=4140-7500, 2D/3D)
-- Backward-facing step (Re=600, 2D)
-- Square cylinder (Re=200-3900, 2D/3D)
-- Sphere (Re=300-3700, 3D)
-- Cube (Re=300-3700, 3D)
-- Turbulent channel flow (Re_tau=206, 3D)
-
-**Airfoil Control**:
-- NACA0012 steady (Re=100-50000, AOA=12-40°, 2D/3D)
-- NACA0012 with gust disturbance (Re=100-50000, 2D/3D)
-
-**High Reynolds Number Flows**:
-- Zero-pressure-gradient turbulent boundary layer with jet/surface wave actuation (Re_Tau=180-2200, 3D)
-- DRA2303 airfoil with jet/surface wave actuation (Re=400000, Ma=0.2-0.7, 3D)
-- NACA0012 airfoil with jet actuation (Re=200000, 3D)
-
-**Fully Differentiable Flows**:
-- Shock-Vector Control in single divergent nozzle (SVC, Ma>1.0, 2D/3D)
-- Turbulent channel flow (Re_tau=180, 3D)
-- Kolmogorov flow (up to Re=1000, 2D)
-
-## Environment Checkpoints
-
-All required environment checkpoints are available via [HuggingFace](https://huggingface.co/datasets/dynamicslab/HydroGym-environments/tree/main) and are downloaded on the fly when an environment is first created (internet connection required). If no internet connection is available at runtime — e.g. on compute nodes in HPC clusters — you can pre-download the environment files as outlined in [examples/maia/README.md](examples/maia/README.md).
-
-## Examples
-
-HydroGym includes comprehensive examples for each solver backend (internet connection required). We highly recommend using our provided docker containers:
-
-### Firedrake Examples
-
-See [examples/firedrake/getting_started/](examples/firedrake/getting_started/) for detailed documentation.
+Run a short single configuration (PPO at Re=45, 25 episodes):
 
 ```bash
-cd examples/firedrake/getting_started
-
-# Test environment interactively
-./run_example_docker.sh
-
-# Train with Stable-Baselines3
-./run_example_docker.sh train
+python run_real_experiment.py --episodes 25 --only ppo_low --out results_demo.json
 ```
 
-### MAIA Examples
+Expected output: periodic per-episode log lines (reward, gradient norm) and a `results_demo.json` file.
 
-See [examples/maia/getting_started/](examples/maia/getting_started/) for MPMD coupling details.
+## Reproducing the results
 
-```bash
-cd examples/maia/getting_started
+| Figure | Command |
+|---|---|
+| Results 1-4, mechanism and gradient-norm figures (`plots/sonuc_1..6.png`) | `python plot_paper_n5.py` (writes `paper_tex/figures/fig_*.pdf`) |
+| Data for seeds 1-4 (about 8.5 h per seed) | `bash run_seed_sweep.sh <SEED>` |
+| Data for seed 0 | `bash run_ppo_gppo_500_sequential.sh` then `bash run_sac_gsac_500_sequential.sh` (edit the hard-coded `cd` path first) |
 
-# Prepare workspace (downloads from Hugging Face Hub) and 
-# Run with MPMD execution (1 Python + 1 MAIA process on GPU)
-./run_example_docker.sh
+Result JSON files for all seeds are included, so the figures can be regenerated without re-training.
 
-# Prepare workspace and train with Stable-Baselines3
-./run_example_docker.sh train
+## Project structure
+
+```
+hydrogym_real/
+├── assets/                # README images
+├── hydrogym/              # upstream HydroGym library (fork), see README_UPSTREAM.md
+├── plots/                 # result figures sonuc_1..6.png
+├── paper/                 # manuscript PDF
+├── paper_jai/             # LaTeX source (Journal of Automation and Intelligence)
+├── paper_tex/             # LaTeX source (elsarticle) + figures/
+├── fast_env.py            # FastKolmogorovFlow: POC-scale parameters for the real env
+├── real_rl.py             # PPO / GPPO
+├── sac_rl.py              # SAC / GSAC
+├── safeguards.py          # gradient clipping, non-finite fallback, warm-up, adaptive mix
+├── run_real_experiment.py # PPO/GPPO driver
+├── run_sac_experiment.py  # SAC/GSAC driver
+├── run_seed_sweep.sh      # full 8-config sweep for one seed
+├── plot_paper_n5.py       # figures of the manuscript (seeds 0-4)
+├── results_500_*.json     # per-config results (500 episodes)
+├── log_500_*.log          # training logs
+├── requirements.txt
+└── README.md
 ```
 
-### NEK5000 Examples
-
-See [examples/nek/getting_started/](examples/nek/getting_started/) for interface patterns.
-
-```bash
-cd examples/nek/getting_started
-
-# Test single-agent environment
-cd 1_nekenv_single
-./run_nekenv_docker.sh
-
-# ... or train with pettinzoo wrapper and SB3
-cd 3_pettingzoo
-./run_pettingzoo_docker.sh train
-
-# ... or run zero-shot transfer learning
-cd 6_zeroshot_wing_demo
-./run_pettingzoo_docker.sh
-```
-
-### JAX Examples
-
-See [examples/jax/getting_started/](examples/jax/getting_started/) for detailed documentation.
-
-```bash
-cd examples/jax/getting_started
-
-# Test Kolmogorov flow environment
-cd 1_kolmogorov
-./run_nekenv_docker.sh
-
-# ... or test channel flow environment
-cd 2_channel
-./run_channel_docker.sh strong_actuation
-
-# ... or run zero-shot transfer learning
-cd 3_ppo
-./run_ppo_docker.sh --env channel --num-envs 1 --num-steps 10 --num-minibatches 5
-```
-
-## Training RL Agents
-
-HydroGym works with standard RL libraries. Example with Stable-Baselines3:
-
-```python
-from hydrogym import FlowEnv
-import hydrogym.firedrake as hgym
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
-
-# Create environment
-def make_env():
-    env_config = {
-        'flow': hgym.Cylinder,
-        'flow_config': {'mesh': 'medium', 'Re': 100},
-        'solver': hgym.SemiImplicitBDF,
-        'solver_config': {'dt': 1e-2},
-        'actuation_config': {'num_substeps': 2},
-    }
-    return FlowEnv(env_config)
-
-# Vectorize and normalize
-env = DummyVecEnv([make_env])
-env = VecNormalize(env, norm_obs=True, norm_reward=True)
-
-# Train
-model = PPO("MlpPolicy", env, verbose=1)
-model.learn(total_timesteps=100000)
-```
-
-See also provided [examples/](examples/) for more details how to leverage individual solver backends for training.
-
-## Advanced Features
-
-- **Checkpoint management**: Automatic loading from Hugging Face Hub
-- **Custom observations**: Force sensors, velocity/pressure/vorticity probes, stress sensors
-- **Callbacks**: Checkpointing, logging, Paraview export
-- **Stability analysis**: Global stability analysis via SLEPc (Firedrake)
-- **Modal decompositions**: DMD, POD via modred (Firedrake)
-- **Multi-agent RL**: PettingZoo interface for distributed actuation (NEK5000)
-
-## Documentation
-
-- **Getting Started Guides**: See `examples/[backend]/getting_started/README.md`
-- **API Documentation**: [https://hydrogym.readthedocs.io](https://hydrogym.readthedocs.io)
-- **Flow Configurations**: [docs/FlowConfigurations.md](docs/FlowConfigurations.md)
-- **Paper**: [arXiv:2512.17534](https://arxiv.org/abs/2512.17534)
-
-## Citation
-
-If you use HydroGym in your research, please cite the following two papers:
+## Citation, license and contact
 
 ```bibtex
-@inproceedings{lagemann2025hydrogym_a,
-  title={HydroGym: A Reinforcement Learning Platform for Fluid Dynamics},
-  author={Lagemann, Christian and Paehler, Ludger and Callaham, Jared and Mokbel, Sajeda and Ahnert, Samuel and Lagemann, Kai and Lagemann, Esther and Adams, Nikolaus and Brunton, Steven},
-  booktitle={7th Annual Learning for Dynamics$\backslash$\& Control Conference},
-  pages={497--512},
-  year={2025},
-  organization={PMLR}
-}
-@article{lagemann2025hydrogym_b,
-  title={Hydrogym: A reinforcement learning platform for fluid dynamics},
-  author={Lagemann, Christian and Mokbel, Sajeda and Gondrum, Miro and R{\"u}ttgers, Mario and Callaham, Jared and Paehler, Ludger and Ahnert, Samuel and Zolman, Nicholas and Lagemann, Kai and Adams, Nikolaus and others},
-  journal={arXiv preprint arXiv:2512.17534},
-  year={2025}
+@misc{ozkurt2026gradient,
+  title  = {Gradient at the Edge of Chaos: Why Analytic-Gradient Reinforcement
+            Learning Has No Seed-Robust Advantage on Chaotic Kolmogorov Flow},
+  author = {{\"O}zkurt, Cem and Onay, Muhammed Emin and Tun{\c{c}}, Ey{\"u}p Altu{\u{g}}
+            and K{\"u}{\c{c}}{\"u}kler, Ahmet Kutay and G{\"u}lo{\u{g}}lu, Haktan Yusuf},
+  year   = {2026},
+  note   = {Manuscript in preparation. Code archive DOI: TODO (Zenodo)}
 }
 ```
 
-## License
-
-HydroGym is released under the MIT License. See [LICENSE](LICENSE) for details.
+License: MIT (see [LICENSE](LICENSE), inherited from upstream HydroGym).
+Contact: Cem Özkurt (corresponding author), cemozkurt@sakarya.edu.tr.

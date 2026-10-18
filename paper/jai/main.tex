@@ -52,6 +52,7 @@
 % ---- CAS class tweaks ---------------------------------------------------------
 % (a) name the target journal in the first-page footer (default: "Elsevier")
 % (b) print the "ORCID(s):" footnote line only when an ORCID is actually given
+% (c) CRediT statement: one author per line instead of a single run-in paragraph
 \ExplSyntaxOn
 \cs_set:Npn \__first_footerline:
   {
@@ -75,6 +76,15 @@
         \group_end:
       }
   }
+\cs_set:Npn \printcredits
+  {
+    \seq_if_empty:NF \g_stm_credits_seq
+      {
+        \section*{CRediT~authorship~contribution~statement}
+        \noindent
+        \seq_use:Nn \g_stm_credits_seq { .\par\noindent }.
+      }
+  }
 \ExplSyntaxOff
 
 % ---- notation shorthands (used across sections/) --------------------------
@@ -84,6 +94,8 @@
 \newcommand{\dd}{\mathrm{d}}
 
 \graphicspath{{figures/}}
+% author photo: used only if the file is present next to main.tex
+\newcommand{\biophoto}[1]{\IfFileExists{#1.jpg}{\def\biotmp{#1}}{\def\biotmp{}}}
 
 \begin{document}
 \let\WriteBookmarks\relax
@@ -99,23 +111,19 @@ Reinforcement Learning Has No Seed-Robust Advantage on Chaotic Kolmogorov Flow}
 \author[1]{Cem \"Ozkurt}[orcid=0000-0002-1251-7715]
 \cormark[1]
 \ead{cemozkurt@sakarya.edu.tr}
-\credit{Conceptualization, Methodology, Investigation,
-Writing -- original draft, Project administration}
+\credit{Conceptualization, Methodology, Supervision, Project administration}
 
 \author[2]{Muhammed Emin Onay}[orcid=0009-0000-0454-4986]
-\credit{Data curation, Visualization, Investigation,
-Writing -- review \& editing}
+\credit{Data curation, Visualization, Investigation, Writing -- review \& editing}
 
 \author[2]{Ey\"up Altu\u{g} Tun\c{c}}[orcid=0009-0007-5166-8077]
-\credit{Software, Validation, Investigation,
-Writing -- review \& editing}
+\credit{Software, Validation, Investigation, Writing -- review \& editing}
 
 \author[3]{Ahmet Kutay K\"u\c{c}\"ukler}[orcid=0009-0007-0202-016X]
-\credit{Investigation, Validation, Writing -- review \& editing}
+\credit{Formal analysis, Resources, Validation, Writing -- review \& editing}
 
 \author[3]{Haktan Yusuf G\"ulo\u{g}lu}[orcid=0009-0007-9429-6154]
-\credit{Conceptualization, Software, Formal analysis, Resources,
-Writing -- original draft, Writing -- review \& editing}
+\credit{Software, Methodology, Writing -- original draft, Writing -- review \& editing}
 
 \affiliation[1]{organization={Department of Data Science and Analytics,
 Faculty of Computer and Information Sciences, Sakarya University},
@@ -221,43 +229,31 @@ a DOI will be added before final publication.
 
 %% Biographies follow the author order.  Each \bio{} still needs its photo
 %% file: save it next to main.tex and change \bio{} to \bio{<filename>},
-%% matching the \bio{photo-haktan} pattern used for the last author.  JAI
+%% matching the \bio{photo-guloglu} pattern used for the last author.  JAI
 %% requires a photograph for every author of a full-length article.
-\bio{}
-Cem \"Ozkurt is a researcher in the Department of Data Science and Analytics,
-Faculty of Computer and Information Sciences, Sakarya University. He conceived
-and designed the study, led its methodology and administered the project.
+\biophoto{photo-ozkurt}\expandafter\bio\expandafter{\biotmp}
+Cem \"Ozkurt is an Assistant Professor in the Department of Data Science and Analytics, Faculty of Computer and Information Sciences, Sakarya University, and Director of the Sakarya University National Technology Workshop Artificial Intelligence Center. He received his Ph.D. in Industrial Engineering from Sakarya University in 2017. His research focuses on artificial intelligence and machine learning, Industry 4.0 and digital transformation, and data analytics in manufacturing and defense industries. In this study he conceived the research, supervised its methodology and administered the project.
+
 \endbio
 
-\bio{}
-Muhammed Emin Onay is affiliated with the Department of Computer Engineering,
-Faculty of Computer and Information Sciences, Sakarya University. In this study
-he contributed to the curation of the per-run experimental data and to the
-visualisation of the breaking-point and gradient-norm results.
+\biophoto{photo-onay}\expandafter\bio\expandafter{\biotmp}
+Muhammed Emin Onay received his B.Sc. degree in Mechatronics Engineering from Sakarya University of Applied Sciences and is currently pursuing an M.Sc. degree in the Department of Computer Engineering, Faculty of Computer and Information Sciences, Sakarya University. He is a researcher and engineer at the Sakarya University National Technology Workshop Artificial Intelligence Center. His research interests include deep learning, reinforcement learning, and robotics. In this study he contributed to data curation, visualisation and the experimental investigation.
+
 \endbio
 
-\bio{}
-Ey\"up Altu\u{g} Tun\c{c} is affiliated with the Department of Computer
-Engineering, Faculty of Computer and Information Sciences, Sakarya University.
-In this study he contributed to the software implementation and to the
-validation of the training pipeline across the five seeds.
+\biophoto{photo-tunc}\expandafter\bio\expandafter{\biotmp}
+Ey\"up Altu\u{g} Tun\c{c} received his B.Sc. degree in Mechatronics Engineering from Sakarya University of Applied Sciences and is currently pursuing an M.Sc. degree in the Department of Computer Engineering, Faculty of Computer and Information Sciences, Sakarya University. He is a researcher at the Sakarya University National Technology Workshop Artificial Intelligence Center. His research interests include artificial intelligence, control systems, and autonomous robotics. In this study he contributed to the software implementation, validation and the experimental investigation.
+
 \endbio
 
-\bio{}
-Ahmet Kutay K\"u\c{c}\"ukler is affiliated with the Department of Computer
-Engineering, Sakarya University of Applied Sciences. In this study he
-contributed to the experimental runs and to the validation of the results.
+\biophoto{photo-kucukler}\expandafter\bio\expandafter{\biotmp}
+Ahmet Kutay K\"u\c{c}\"ukler is a student in the Department of Computer Engineering, Sakarya University of Applied Sciences. He has worked as a research student at artificial intelligence research centers in Sakarya, including the Sakarya University National Technology Workshop Artificial Intelligence Center. His research interests include artificial intelligence and data analytics. In this study he contributed to the formal analysis, the provision of resources and the validation of the results.
+
 \endbio
 
-\bio{photo-haktan}
-Haktan Yusuf G\"ulo\u{g}lu graduated at the top of his class from Profilo
-Vocational and Technical Anatolian High School and is currently an
-undergraduate student in the Department of Computer Engineering, Sakarya
-University of Applied Sciences. His research centers on reinforcement
-learning and large language models, with a particular interest in the
-stability of learning algorithms under complex, high-dimensional, and
-chaotic dynamics. This work is his first contribution to the
-differentiable-simulation reinforcement learning literature.
+\biophoto{photo-guloglu}\expandafter\bio\expandafter{\biotmp}
+Haktan Yusuf G\"ulo\u{g}lu is an undergraduate student in the Department of Computer Engineering, Sakarya University of Applied Sciences, and a student researcher at the Sakarya University National Technology Workshop Artificial Intelligence Center. His research centers on reinforcement learning and large language models, with a particular interest in the stability of learning algorithms under complex, high-dimensional, and chaotic dynamics. In this study he contributed to the software implementation and methodology and wrote the original draft of the manuscript.
+
 \endbio
 
 \end{document}

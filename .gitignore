@@ -137,3 +137,9 @@ examples/firedrake/getting_started/output/
 
 # VSCode
 .vscode/
+
+# co-author photos stay local (supplied for journal submission only)
+paper/jai/photo-ozkurt.jpg
+paper/jai/photo-onay.jpg
+paper/jai/photo-tunc.jpg
+paper/jai/photo-kucukler.jpg

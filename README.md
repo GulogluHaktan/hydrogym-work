@@ -142,6 +142,8 @@ hydrogym_real/
 
 ## Citation, license and contact
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23452182.svg)](https://doi.org/10.5281/zenodo.23452182)
+
 ```bibtex
 @misc{ozkurt2026gradient,
   title  = {Gradient at the Edge of Chaos: Why Analytic-Gradient Reinforcement
@@ -149,7 +151,8 @@ hydrogym_real/
   author = {{\"O}zkurt, Cem and Onay, Muhammed Emin and Tun{\c{c}}, Ey{\"u}p Altu{\u{g}}
             and K{\"u}{\c{c}}{\"u}kler, Ahmet Kutay and G{\"u}lo{\u{g}}lu, Haktan Yusuf},
   year   = {2026},
-  note   = {Manuscript in preparation. Code archive DOI: TODO (Zenodo)}
+  doi    = {10.5281/zenodo.23452182},
+  note   = {Manuscript in preparation. Code archive: Zenodo}
 }
 ```
 

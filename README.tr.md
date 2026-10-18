@@ -39,7 +39,7 @@ flowchart TD
   J -- "evet" --> C
   J -- "hayır" --> K["JSON sonuçları ve logları kaydet"]
   I --> K
-  K --> L["plot_paper_n5.py şekilleri üretir"]
+  K --> L["analysis/plot_paper_n5.py şekilleri üretir"]
 ```
 
 ## Seçilmiş sonuçlar
@@ -88,8 +88,8 @@ Gereksinimler: Linux, Python 3.10 veya 3.11, sürücüsü >= 550 olan NVIDIA GPU
 
 ```bash
 git clone https://github.com/GulogluHaktan/hydrogym-work.git
-cd hydrogym-work/hydrogym_real   # depo kökü doğrudan hydrogym_real ise kökte kal
-bash setup_env.sh                # GPU JAX ile ../venv oluşturur (yaklaşık 6 GB)
+cd hydrogym-work
+bash scripts/setup_env.sh                # GPU JAX ile ../venv oluşturur (yaklaşık 6 GB)
 source ../venv/bin/activate
 python -c "import jax, hydrogym.jax; print(jax.devices())"
 ```
@@ -99,18 +99,18 @@ python -c "import jax, hydrogym.jax; print(jax.devices())"
 Kısa tek konfigürasyon çalıştırma (Re=45'te PPO, 25 epizot):
 
 ```bash
-python run_real_experiment.py --episodes 25 --only ppo_low --out results_demo.json
+python experiments/run_real_experiment.py --episodes 25 --only ppo_low --out results/results_demo.json
 ```
 
-Beklenen çıktı: epizot başına düzenli log satırları (ödül, gradyan normu) ve bir `results_demo.json` dosyası.
+Beklenen çıktı: epizot başına düzenli log satırları (ödül, gradyan normu) ve bir `results/results_demo.json` dosyası.
 
 ## Sonuçları yeniden üret
 
 | Şekil | Komut |
 |---|---|
-| Sonuç 1-4, mekanizma ve gradyan normu şekilleri (`plots/sonuc_1..6.png`) | `python plot_paper_n5.py` (`paper_tex/figures/fig_*.pdf` yazar) |
-| Seed 1-4 verisi (seed başına yaklaşık 8,5 saat) | `bash run_seed_sweep.sh <SEED>` |
-| Seed 0 verisi | `bash run_ppo_gppo_500_sequential.sh` ardından `bash run_sac_gsac_500_sequential.sh` |
+| Sonuç 1-4, mekanizma ve gradyan normu şekilleri (`plots/sonuc_1..6.png`) | `bash scripts/make_readme_plots.sh` (`analysis/plot_paper_n5.py` çalıştırır, `paper/elsarticle/figures/fig_*.pdf` yazar) |
+| Seed 1-4 verisi (seed başına yaklaşık 8,5 saat) | `bash scripts/run_seed_sweep.sh <SEED>` |
+| Seed 0 verisi | `bash scripts/legacy/run_ppo_gppo_500_sequential.sh` ardından `bash scripts/legacy/run_sac_gsac_500_sequential.sh` |
 
 Tüm seed'lerin sonuç JSON dosyaları depoda olduğundan şekiller yeniden eğitim yapmadan üretilebilir.
 
@@ -118,22 +118,24 @@ Tüm seed'lerin sonuç JSON dosyaları depoda olduğundan şekiller yeniden eği
 
 ```
 hydrogym_real/
-├── assets/                # README images
-├── hydrogym/              # upstream HydroGym library (fork), see README_UPSTREAM.md
-├── plots/                 # result figures sonuc_1..6.png
-├── paper/                 # manuscript PDF
-├── paper_jai/             # LaTeX source (Journal of Automation and Intelligence)
-├── paper_tex/             # LaTeX source (elsarticle) + figures/
-├── fast_env.py            # FastKolmogorovFlow: POC-scale parameters for the real env
-├── real_rl.py             # PPO / GPPO
-├── sac_rl.py              # SAC / GSAC
-├── safeguards.py          # gradient clipping, non-finite fallback, warm-up, adaptive mix
-├── run_real_experiment.py # PPO/GPPO driver
-├── run_sac_experiment.py  # SAC/GSAC driver
-├── run_seed_sweep.sh      # full 8-config sweep for one seed
-├── plot_paper_n5.py       # figures of the manuscript (seeds 0-4)
-├── results_500_*.json     # per-config results (500 episodes)
-├── log_500_*.log          # training logs
+├── experiments/           # kendi kodumuz
+│   ├── fast_env.py        #   FastKolmogorovFlow: gerçek ortam için POC ölçekli parametreler
+│   ├── real_rl.py         #   PPO / GPPO
+│   ├── sac_rl.py          #   SAC / GSAC
+│   ├── safeguards.py      #   gradyan kırpma, sonlu-olmayan geri dönüş, ısınma, uyarlanır karışım
+│   ├── run_real_experiment.py  # PPO/GPPO sürücüsü
+│   ├── run_sac_experiment.py   # SAC/GSAC sürücüsü
+│   └── real_grad_probe.py #   gradyan duyarlılık sondası
+├── analysis/              # grafik ve istatistik (plot_paper_n5.py, sig_test_n5.py, ...)
+├── scripts/               # setup_env.sh, run_seed_sweep.sh, run_ext_all.sh, make_readme_plots.sh
+├── results/               # konfigürasyon başına sonuçlar, results_500_*.json (500 epizot)
+├── logs/                  # eğitim logları (git-ignore)
+├── plots/                 # sonuç grafikleri sonuc_1..6.png
+├── paper/                 # makale: PDF, PAPER_DRAFT_EN.md, jai/ (JAI), elsarticle/ (Elsevier)
+├── reports/               # internal reports (Türkçe) ve PDF üreticileri
+├── assets/                # README görselleri
+├── hydrogym/              # upstream HydroGym kütüphanesi (fork), see README_UPSTREAM.md
+├── docs/ examples/ test/ third_party/   # upstream
 ├── requirements.txt
 └── README.md
 ```

@@ -39,7 +39,7 @@ flowchart TD
   J -- "yes" --> C
   J -- "no" --> K["Save JSON results and logs"]
   I --> K
-  K --> L["plot_paper_n5.py renders the figures"]
+  K --> L["analysis/plot_paper_n5.py renders the figures"]
 ```
 
 ## Selected results
@@ -88,8 +88,8 @@ Requirements: Linux, Python 3.10 or 3.11, NVIDIA GPU with driver >= 550 (no syst
 
 ```bash
 git clone https://github.com/GulogluHaktan/hydrogym-work.git
-cd hydrogym-work/hydrogym_real   # if the repo root is hydrogym_real itself, stay in the root
-bash setup_env.sh                # creates ../venv with GPU JAX (about 6 GB)
+cd hydrogym-work
+bash scripts/setup_env.sh                # creates ../venv with GPU JAX (about 6 GB)
 source ../venv/bin/activate
 python -c "import jax, hydrogym.jax; print(jax.devices())"
 ```
@@ -99,18 +99,18 @@ python -c "import jax, hydrogym.jax; print(jax.devices())"
 Run a short single configuration (PPO at Re=45, 25 episodes):
 
 ```bash
-python run_real_experiment.py --episodes 25 --only ppo_low --out results_demo.json
+python experiments/run_real_experiment.py --episodes 25 --only ppo_low --out results/results_demo.json
 ```
 
-Expected output: periodic per-episode log lines (reward, gradient norm) and a `results_demo.json` file.
+Expected output: periodic per-episode log lines (reward, gradient norm) and a `results/results_demo.json` file.
 
 ## Reproducing the results
 
 | Figure | Command |
 |---|---|
-| Results 1-4, mechanism and gradient-norm figures (`plots/sonuc_1..6.png`) | `python plot_paper_n5.py` (writes `paper_tex/figures/fig_*.pdf`) |
-| Data for seeds 1-4 (about 8.5 h per seed) | `bash run_seed_sweep.sh <SEED>` |
-| Data for seed 0 | `bash run_ppo_gppo_500_sequential.sh` then `bash run_sac_gsac_500_sequential.sh` |
+| Results 1-4, mechanism and gradient-norm figures (`plots/sonuc_1..6.png`) | `bash scripts/make_readme_plots.sh` (runs `analysis/plot_paper_n5.py`, writes `paper/elsarticle/figures/fig_*.pdf`) |
+| Data for seeds 1-4 (about 8.5 h per seed) | `bash scripts/run_seed_sweep.sh <SEED>` |
+| Data for seed 0 | `bash scripts/legacy/run_ppo_gppo_500_sequential.sh` then `bash scripts/legacy/run_sac_gsac_500_sequential.sh` |
 
 Result JSON files for all seeds are included, so the figures can be regenerated without re-training.
 
@@ -118,22 +118,24 @@ Result JSON files for all seeds are included, so the figures can be regenerated 
 
 ```
 hydrogym_real/
+├── experiments/           # our code
+│   ├── fast_env.py        #   FastKolmogorovFlow: POC-scale parameters for the real env
+│   ├── real_rl.py         #   PPO / GPPO
+│   ├── sac_rl.py          #   SAC / GSAC
+│   ├── safeguards.py      #   gradient clipping, non-finite fallback, warm-up, adaptive mix
+│   ├── run_real_experiment.py  # PPO/GPPO driver
+│   ├── run_sac_experiment.py   # SAC/GSAC driver
+│   └── real_grad_probe.py #   gradient-sensitivity probe
+├── analysis/              # plotting and statistics (plot_paper_n5.py, sig_test_n5.py, ...)
+├── scripts/               # setup_env.sh, run_seed_sweep.sh, run_ext_all.sh, make_readme_plots.sh
+├── results/               # per-config results, results_500_*.json (500 episodes)
+├── logs/                  # training logs (git-ignored)
+├── plots/                 # result figures sonuc_1..6.png
+├── paper/                 # manuscript: PDF, PAPER_DRAFT_EN.md, jai/ (JAI), elsarticle/ (Elsevier)
+├── reports/               # internal reports (Turkish) and PDF generators
 ├── assets/                # README images
 ├── hydrogym/              # upstream HydroGym library (fork), see README_UPSTREAM.md
-├── plots/                 # result figures sonuc_1..6.png
-├── paper/                 # manuscript PDF
-├── paper_jai/             # LaTeX source (Journal of Automation and Intelligence)
-├── paper_tex/             # LaTeX source (elsarticle) + figures/
-├── fast_env.py            # FastKolmogorovFlow: POC-scale parameters for the real env
-├── real_rl.py             # PPO / GPPO
-├── sac_rl.py              # SAC / GSAC
-├── safeguards.py          # gradient clipping, non-finite fallback, warm-up, adaptive mix
-├── run_real_experiment.py # PPO/GPPO driver
-├── run_sac_experiment.py  # SAC/GSAC driver
-├── run_seed_sweep.sh      # full 8-config sweep for one seed
-├── plot_paper_n5.py       # figures of the manuscript (seeds 0-4)
-├── results_500_*.json     # per-config results (500 episodes)
-├── log_500_*.log          # training logs
+├── docs/ examples/ test/ third_party/   # upstream
 ├── requirements.txt
 └── README.md
 ```

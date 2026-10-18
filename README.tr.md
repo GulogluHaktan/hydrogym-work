@@ -110,7 +110,7 @@ Beklenen çıktı: epizot başına düzenli log satırları (ödül, gradyan nor
 |---|---|
 | Sonuç 1-4, mekanizma ve gradyan normu şekilleri (`plots/sonuc_1..6.png`) | `python plot_paper_n5.py` (`paper_tex/figures/fig_*.pdf` yazar) |
 | Seed 1-4 verisi (seed başına yaklaşık 8,5 saat) | `bash run_seed_sweep.sh <SEED>` |
-| Seed 0 verisi | `bash run_ppo_gppo_500_sequential.sh` ardından `bash run_sac_gsac_500_sequential.sh` (önce koddaki sabit `cd` yolunu düzenle) |
+| Seed 0 verisi | `bash run_ppo_gppo_500_sequential.sh` ardından `bash run_sac_gsac_500_sequential.sh` |
 
 Tüm seed'lerin sonuç JSON dosyaları depoda olduğundan şekiller yeniden eğitim yapmadan üretilebilir.
 

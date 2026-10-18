@@ -6,7 +6,7 @@
 # run_ppo_gppo_500_sequential.sh / run_sac_gsac_500_sequential.sh comments).
 # Outputs are suffixed _seed2 so seed=0 results are never overwritten.
 set -e
-cd /home/haktan/Projects/HydroGymDeney/hydrogym_real
+cd "$(dirname "${BASH_SOURCE[0]}")"
 source ../venv/bin/activate
 
 export XLA_PYTHON_CLIENT_PREALLOCATE=false

@@ -3,7 +3,7 @@
 # to avoid GPU OOM, while PPO/SAC (no analytic gradient) keep running in
 # parallel in their own separate processes.
 set -e
-cd /home/haktan/Projects/HydroGymDeney/hydrogym_real
+cd "$(dirname "${BASH_SOURCE[0]}")"
 source ../venv/bin/activate
 
 export XLA_PYTHON_CLIENT_PREALLOCATE=false

@@ -17,8 +17,8 @@ bit-aynı** çalışır — yeni davranışların hepsi opsiyonel bayrakların a
 ## Kurulum + çalıştırma (tek komut)
 
 ```bash
-unzip HydroGym_ek_calismalar.zip
-cd hydrogym_ext
+git clone https://github.com/GulogluHaktan/hydrogym-work.git
+cd hydrogym-work
 nohup bash run_ext_all.sh > log_ext_all.log 2>&1 &
 tail -f log_ext_all.log
 ```

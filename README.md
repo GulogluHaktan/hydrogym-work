@@ -110,7 +110,7 @@ Expected output: periodic per-episode log lines (reward, gradient norm) and a `r
 |---|---|
 | Results 1-4, mechanism and gradient-norm figures (`plots/sonuc_1..6.png`) | `python plot_paper_n5.py` (writes `paper_tex/figures/fig_*.pdf`) |
 | Data for seeds 1-4 (about 8.5 h per seed) | `bash run_seed_sweep.sh <SEED>` |
-| Data for seed 0 | `bash run_ppo_gppo_500_sequential.sh` then `bash run_sac_gsac_500_sequential.sh` (edit the hard-coded `cd` path first) |
+| Data for seed 0 | `bash run_ppo_gppo_500_sequential.sh` then `bash run_sac_gsac_500_sequential.sh` |
 
 Result JSON files for all seeds are included, so the figures can be regenerated without re-training.
 

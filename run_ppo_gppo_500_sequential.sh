@@ -4,7 +4,7 @@
 # discovered empirically). PPO + GPPO only, 500 episodes each, both Re
 # regimes, matching the Nature paper's Fig 3b panel exactly.
 set -e
-cd /home/haktan/Projects/HydroGymDeney/hydrogym_real
+cd "$(dirname "${BASH_SOURCE[0]}")"
 source ../venv/bin/activate
 
 export XLA_PYTHON_CLIENT_PREALLOCATE=false

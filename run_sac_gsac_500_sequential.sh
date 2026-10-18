@@ -4,7 +4,7 @@
 # with the PPO/GPPO 500-episode run). SAC + GSAC, 500 episodes each, both
 # Re regimes.
 set -e
-cd /home/haktan/Projects/HydroGymDeney/hydrogym_real
+cd "$(dirname "${BASH_SOURCE[0]}")"
 source ../venv/bin/activate
 
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
